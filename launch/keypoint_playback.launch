@@ -1,0 +1,11 @@
+<launch>
+
+  <!-- bagfile playback -->
+  <node name="player" pkg="rosbag" type="play" output="screen"
+    args="-q --clock -r 1.0 /home/danpierce/devel/lidar_ws/data/velodyne_bag_1min_2017-05-22-12-05-38.bag" />
+
+    
+  <node pkg="feature_extraction" type="narf_node" name="narf_node" output="screen" />
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/>
+</launch>
