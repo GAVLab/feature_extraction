@@ -9,30 +9,12 @@
 
 #include <iostream>
 
-// #include <boost/thread/thread.hpp>
-// #include <pcl/range_image/range_image.h>
-// #include <pcl/io/pcd_io.h>
-// #include <pcl/visualization/range_image_visualizer.h>
-// #include <pcl/visualization/pcl_visualizer.h>
-// #include <pcl/features/range_image_border_extractor.h>
-// #include <pcl/keypoints/narf_keypoint.h>
 #include <pcl/console/parse.h>
-
-
-// #include <pcl/keypoints/harris_3d.h>
 
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/features/normal_3d.h>
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
-
-// --------------------
-// -----Parameters-----
-// --------------------
-// float angular_resolution = 0.5f;
-// float support_size = 0.2f;
-// bool setUnseenToMaxRange = false;
-
 
 ros::Publisher pub;
 
@@ -86,24 +68,16 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
   sift.compute(result);
 
   // Copying the pointwithscale to pointxyz so as visualize the cloud
-  PointCloud::Ptr msg (new PointCloud);
-  copyPointCloud(result, *msg);
+  PointCloud::Ptr keypoints (new PointCloud);
+  copyPointCloud(result, *keypoints);
+
+  std::cout << "keypoints detected: " << keypoints->size() << std::endl;
+  std::cout << keypoints->points[0].x << " "<< keypoints->points[0].y << " "<< keypoints->points[0].z << " " << std::endl;
 
 
-  // pcl::fromPCLPointCloud2(pcl_pc2,*cloud_xyz);
-  // pcl::PCLPointCloud2 cloud_temp2;
-  // pcl::toPCLPointCloud2(cloud_temp,*cloud_temp2);
+  keypoints->header.frame_id = cloud_msg->header.frame_id;
 
-
-  // PointCloud::Ptr msg (new PointCloud);
-  msg->header.frame_id = cloud_msg->header.frame_id;
-  // msg->height = msg->width = 1;
-  // msg->points.push_back (pcl::PointXYZ(1.0, 2.0, 3.0));
-
-  pub.publish (msg);
-  //   ros::spinOnce ();
-  //   loop_rate.sleep ();
-  // }
+  pub.publish (keypoints);
 
 }
 
@@ -111,8 +85,8 @@ int
 main (int argc, char** argv)
 {
   // Initialize ROS
-  ros::init (argc, argv, "my_pcl_tutorial");
-  ros::NodeHandle nh;
+  ros::init (argc, argv, "feature_extraction_node");
+  ros::NodeHandle nh("~");
 
   // Create a ROS subscriber for the input point cloud
   ros::Subscriber sub = nh.subscribe ("/velodyne_points", 1, cloud_cb);

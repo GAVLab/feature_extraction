@@ -1,11 +1,34 @@
 <launch>
 
-  <!-- bagfile playback -->
-  <node name="player" pkg="rosbag" type="play" output="screen"
-    args="-q --clock -r 1.0 /home/danpierce/devel/lidar_ws/data/velodyne_bag_1min_2017-05-22-12-05-38.bag" />
+ <!-- /home/danpierce/devel/lidar_ws/data/velodyne_bag_1min_2017-05-22-12-05-38.bag -->
 
-    
-  <node pkg="feature_extraction" type="narf_node" name="narf_node" output="screen" />
+<arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
+<!-- <arg name="bagfile" default="ion_gnss_forestry_loop_gps_imu_only.bag"/> -->
+
+<arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/>
+
+  <!-- bagfile playback -->
+<node name="player" pkg="rosbag" type="play" output="screen"
+    args="-l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
+
+  <!-- <node pkg="feature_extraction" type="sift_node" name="sift_node" output="screen" /> -->
+
+  <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
+  	<param name="harris_number_of_threads" value="0"/>
+  	<param name="harris_refine" value="false"/>
+  	<param name="harris_non_max_supression" value="true"/>
+  	<param name="harris_radius" value="0.5"/>
+  	<param name="harris_threshold" value="0.0"/>
+  	<param name="z_max" value="2.0"/>
+  	<param name="z_min" value="-0.2"/>
+  </node>
+
+
+
+
+
+
 
   <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/>
+
 </launch>
