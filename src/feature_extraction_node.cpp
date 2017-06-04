@@ -68,9 +68,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   // definitions
   pcl::PCLPointCloud2 cloud2;
   PointCloud::Ptr cloud_in(new PointCloud);
-  PointCloud::Ptr keypoints(new PointCloud());
-  pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>());
-
+  
   // sensor_msgs::PointCloud2 to pcl::PCLPointCloud2
   pcl_conversions::toPCL(*msg,cloud2);
 
@@ -91,32 +89,67 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   
   filt_pub.publish (cloud);
 
-  float angularResolutionX = (float)(0.8f * (M_PI / 180.0f));
-  float angularResolutionY = (float)(2.0f * (M_PI / 180.0f));
 
+  PointCloud::Ptr keypoints(new PointCloud());
 
-  // // Instance of Harris detector
-  // pcl::HarrisKeypoint3D<Point,Point> detector;
+  pcl::HarrisKeypoint3D <Point, Point> detector;
   
-  // detector.setNumberOfThreads(numThreads);
-  // detector.setRefine(refine);
-  // detector.setNonMaxSupression(nonMaxSupression); 
-  // detector.setRadius(radius); 
-  // detector.setThreshold(threshold); 
-  // detector.setInputCloud(cloud);
-
-  // detector.compute(*keypoints); 
-
-  // std::cout << "keypoints detected: " << keypoints->size() << std::endl;
-
-  // // std::cout << keypoints->points[0].x << " "<< keypoints->points[0].y << " "<< keypoints->points[0].z << " " << std::endl;
-
-  // keypoints->header.frame_id = msg->header.frame_id;
+  detector.setNumberOfThreads(numThreads);
+  detector.setRefine(refine);
+  detector.setNonMaxSupression(nonMaxSupression); 
+  detector.setRadius(radius); 
+  detector.setThreshold(threshold); 
+  detector.setInputCloud(cloud);
+ 
+  pcl::StopWatch watch;
+  detector.compute (*keypoints);
+  // pcl::PointIndicesConstPtr keypoints_indices = detector.getKeypointsIndices ();
+  
+  keypoints->header.frame_id = msg->header.frame_id;
   // // keypoints->header.stamp = msg->header.stamp;
+  kp_pub.publish (keypoints);
+  
 
-  // kp_pub.publish (keypoints);
+  
+  pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>());
+  // Object for storing the normals.
+  pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+
+
+  // Estimate the normals.
+  pcl::NormalEstimation<Point, pcl::Normal> normalEstimation;
+  normalEstimation.setInputCloud(keypoints);
+  normalEstimation.setRadiusSearch(0.1);
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
+  normalEstimation.setSearchMethod(kdtree);
+  normalEstimation.compute(*normals);
+
+  
+  // SHOT estimation object.
+  pcl::SHOTEstimation<Point, pcl::Normal, pcl::SHOT352> shot;
+  shot.setInputCloud(keypoints);
+  shot.setInputNormals(normals);
+  
+  // The radius that defines which of the keypoint's neighbors are described.
+  // If too large, there may be clutter, and if too small, not enough points may be found.
+  shot.setRadiusSearch(0.5);
+  shot.compute(*descriptors);
+
+  std::cout << "descriptor size: " << descriptors->size() << std::endl;
+  std::cout << "cloud size: " << cloud->size() << std::endl;
+  
+  pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
+  
+  // // std::cout << keypoints->points[0].x << " "<< keypoints->points[0].y << " "<< keypoints->points[0].z << " " << std::endl;
+  /*
+  */
+  
 
 }
+
+// void FeatureExtractionNode::getKeypointIndices (const PointCloud &cloud)
+// {
+// }
 
 void FeatureExtractionNode::rotateCloud (const PointCloud &cloud, PointCloud::Ptr transformed_cloud)
 {

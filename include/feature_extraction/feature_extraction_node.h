@@ -46,6 +46,8 @@ class FeatureExtractionNode
 
     void filterCloud (PointCloud::Ptr cloud);
 
+    void getKeypointIndices (const PointCloud &cloud);
+
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     
