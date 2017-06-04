@@ -25,6 +25,8 @@
 #include <pcl/features/shot.h>
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/common/transforms.h>
+#include <pcl/features/usc.h>
+#include <pcl/features/feature.h>
 
 /*! /brief Primary class for the feature extraction node class
 *
@@ -59,11 +61,9 @@ class FeatureExtractionNode
     // // Instance of Harris detector
     // pcl::HarrisKeypoint3D<pcl::PointXYZI,pcl::PointXYZI> detector;
   
-    int numThreads;
-    bool refine, nonMaxSupression;
-    double radius,threshold,zMin,zMax;
+    double searchRadius,minRadius,pointDensityRadius,localRadius;
 
-    double roll,pitch;
+    double roll,pitch,zMin,zMax;
 
 };
 
