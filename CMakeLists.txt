@@ -22,6 +22,9 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS})
 
 
+add_executable(narf_node src/narf_node.cpp)
+target_link_libraries(narf_node ${catkin_LIBRARIES})
+
 add_executable(sift_node src/sift_node.cpp)
 target_link_libraries(sift_node ${catkin_LIBRARIES})
 

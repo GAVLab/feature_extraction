@@ -55,11 +55,9 @@ void FeatureExtractionNode::imuCallback (const sensor_msgs::ImuConstPtr& msg)
   tf::quaternionMsgToTF(msg->orientation, quat);
 
   // the tf::Quaternion has a method to acess roll pitch and yaw
-  // double yaw,tmproll;
-  // tf::Matrix3x3(quat).getRPY(tmproll, pitch, yaw);
-  // roll = tmproll - M_PI;
-
-  roll = 39*M_PI/180; pitch = 60*M_PI/180;
+  double yaw,tmproll;
+  tf::Matrix3x3(quat).getRPY(tmproll, pitch, yaw);
+  roll = tmproll - M_PI;
 
   // std::cout << "roll = " << roll*180/3.14 << "pitch = " << pitch*180/3.14 << std::endl;
 
@@ -69,7 +67,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
 {
   // definitions
   pcl::PCLPointCloud2 cloud2;
-  PointCloud::Ptr cloud(new PointCloud);
+  PointCloud::Ptr cloud_in(new PointCloud);
   PointCloud::Ptr keypoints(new PointCloud());
   pcl::PointCloud<pcl::SHOT352>::Ptr descriptors(new pcl::PointCloud<pcl::SHOT352>());
 
@@ -77,93 +75,51 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl_conversions::toPCL(*msg,cloud2);
 
   // pcl::PCLPointCloud2 to PointCloud
-  pcl::fromPCLPointCloud2(cloud2,*cloud);
+  pcl::fromPCLPointCloud2(cloud2,*cloud_in);
 
   
+  PointCloud::Ptr cloud(new PointCloud);
+  rotateCloud(*cloud_in,cloud);
 
-  cloud->width  = 2;
-  cloud->height = 1;
-  cloud->points.resize (cloud->width * cloud->height);
 
-  for (size_t i = 0; i < cloud->points.size (); ++i)
-  {
-    cloud->points[i].x = 4.0f;
-    cloud->points[i].y = 3.0f;
-    cloud->points[i].z = 2.0f;
-    cloud->points[i].intensity = 0.0f;
-  }
 
-  PointCloud::Ptr transformed_cloud(new PointCloud);
-  rotateCloud(*cloud,transformed_cloud);
 
-  // std::cout << "transformed_cloud size: " << transformed_cloud->size() <<  std::endl;  
-  std::cout << roll << " " << pitch << std::endl;  
-  std::cout << transformed_cloud->points[0].x << " " << transformed_cloud->points[0].y << " " << transformed_cloud->points[0].z << std::endl;  
-  std::cout << " " << std::endl;  
-  
-  return;
+  filterCloud(cloud);
 
-  // // Filter object.
-  // pcl::PassThrough<Point> filter;
-  // filter.setInputCloud(cloud);
-  // filter.setFilterFieldName("z");
-  // filter.setFilterLimits(zMin, zMax);
-  // filter.filter(*cloud);
-
-  // filter.setFilterLimitsNegative(true);
-  // filter.setFilterFieldName("x");
-  // filter.setFilterLimits(-1.0, 1.0);
-  // filter.filter(*cloud);
-
-  // filter.setFilterFieldName("y");
-  // filter.setFilterLimits(-1.0, 1.0);
-  // filter.filter(*cloud);
-
-  // cloud->header.frame_id = msg->header.frame_id;
+  cloud->header.frame_id = msg->header.frame_id;
 
   
   filt_pub.publish (cloud);
 
+  float angularResolutionX = (float)(0.8f * (M_PI / 180.0f));
+  float angularResolutionY = (float)(2.0f * (M_PI / 180.0f));
 
-  // Instance of Harris detector
-  pcl::HarrisKeypoint3D<Point,Point> detector;
+
+  // // Instance of Harris detector
+  // pcl::HarrisKeypoint3D<Point,Point> detector;
   
-  detector.setNumberOfThreads(numThreads);
-  detector.setRefine(refine);
-  detector.setNonMaxSupression(nonMaxSupression); 
-  detector.setRadius(radius); 
-  detector.setThreshold(threshold); 
-  detector.setInputCloud(cloud);
+  // detector.setNumberOfThreads(numThreads);
+  // detector.setRefine(refine);
+  // detector.setNonMaxSupression(nonMaxSupression); 
+  // detector.setRadius(radius); 
+  // detector.setThreshold(threshold); 
+  // detector.setInputCloud(cloud);
 
-  detector.compute(*keypoints); 
+  // detector.compute(*keypoints); 
 
-  std::cout << "keypoints detected: " << keypoints->size() << std::endl;
+  // std::cout << "keypoints detected: " << keypoints->size() << std::endl;
 
-  // std::cout << keypoints->points[0].x << " "<< keypoints->points[0].y << " "<< keypoints->points[0].z << " " << std::endl;
+  // // std::cout << keypoints->points[0].x << " "<< keypoints->points[0].y << " "<< keypoints->points[0].z << " " << std::endl;
 
-  keypoints->header.frame_id = msg->header.frame_id;
-  // keypoints->header.stamp = msg->header.stamp;
+  // keypoints->header.frame_id = msg->header.frame_id;
+  // // keypoints->header.stamp = msg->header.stamp;
 
-  kp_pub.publish (keypoints);
+  // kp_pub.publish (keypoints);
 
 }
 
 void FeatureExtractionNode::rotateCloud (const PointCloud &cloud, PointCloud::Ptr transformed_cloud)
 {
-  // std::cout << "cloud size: " << cloud->size() <<  std::endl;  
-
-
-  transformed_cloud->width  = 2;
-  transformed_cloud->height = 1;
-  transformed_cloud->points.resize (transformed_cloud->width * transformed_cloud->height);
-
-  for (size_t i = 0; i < transformed_cloud->points.size (); ++i)
-  {
-    transformed_cloud->points[i].x = 4.0f;
-    transformed_cloud->points[i].y = 3.0f;
-    transformed_cloud->points[i].z = 2.0f;
-    transformed_cloud->points[i].intensity = 0.0f;
-  }
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
 
@@ -174,11 +130,28 @@ void FeatureExtractionNode::rotateCloud (const PointCloud &cloud, PointCloud::Pt
   transform.rotate (  Eigen::AngleAxisf (pitch, Eigen::Vector3f::UnitY())*
                       Eigen::AngleAxisf (roll, Eigen::Vector3f::UnitX())   );
 
-  // Print the transformation
-  std::cout << transform.matrix() << std::endl;
-
   // Executing the transformation
   pcl::transformPointCloud (cloud, *transformed_cloud, transform);
+}
+
+void FeatureExtractionNode::filterCloud (PointCloud::Ptr cloud){
+
+// Filter object.
+pcl::PassThrough<Point> filter;
+filter.setInputCloud(cloud);
+filter.setFilterFieldName("z");
+filter.setFilterLimits(zMin, zMax);
+filter.filter(*cloud);
+
+filter.setFilterLimitsNegative(true);
+filter.setFilterFieldName("x");
+filter.setFilterLimits(-131.0, 1.0);
+filter.filter(*cloud);
+
+filter.setFilterFieldName("y");
+filter.setFilterLimits(-1.0, 1.0);
+filter.filter(*cloud);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////

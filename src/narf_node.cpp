@@ -17,6 +17,7 @@
 #include <pcl/range_image/range_image_spherical.h>
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+typedef pcl::PointCloud<pcl::PointXYZI> PointCloud_i;
 
 ros::Publisher pub;
 ros::Publisher ri_pub;
@@ -24,51 +25,29 @@ ros::Publisher ri_pub;
 pcl::visualization::RangeImageVisualizer viewer("Range image");
 
 void 
-cloud_cb (const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
+cloud_cb (const sensor_msgs::PointCloud2ConstPtr& msg)
 {
-  // std::cout << "here" << std::endl;
 
-  // Object for storing the keypoints' indices.
-  pcl::PointCloud<int>::Ptr keypoints_idx(new pcl::PointCloud<int>);
+  pcl::PCLPointCloud2 cloud2;
   PointCloud::Ptr cloud(new PointCloud);
-  
-  pcl::PCLPointCloud2 pcl_pc2;
-  pcl_conversions::toPCL(*cloud_msg,pcl_pc2);
-  pcl::fromPCLPointCloud2(pcl_pc2,*cloud);
+  // sensor_msgs::PointCloud2 to pcl::PCLPointCloud2
+  pcl_conversions::toPCL(*msg,cloud2);
 
-  
-// Parameters needed by the range image object:
-// Angular resolution is the angular distance between pixels.
-// Kinect: 57° horizontal FOV, 43° vertical FOV, 640x480 (chosen here).
-// Xtion: 58° horizontal FOV, 45° vertical FOV, 640x480.
-// Velodyne: 360° azimuth FOV, ~7200 points per scan = ~450 points per channel = ~0.8 degrees / point
-// Velodyne: 30° elevation FOV, 16 channels = ~2 degrees / channel
+  // pcl::PCLPointCloud2 to PointCloud
+  pcl::fromPCLPointCloud2(cloud2,*cloud);
 
-// float angularResolutionX = (float)(57.0f / 640.0f * (M_PI / 180.0f));
-// float angularResolutionY = (float)(43.0f / 480.0f * (M_PI / 180.0f));
+  float angularResolutionX = (float)(0.8f * (M_PI / 180.0f));
+  float angularResolutionY = (float)(2.0f * (M_PI / 180.0f));
 
-float angularResolutionX = (float)(0.8f * (M_PI / 180.0f));
-float angularResolutionY = (float)(2.0f * (M_PI / 180.0f));
+  float maxAngleW = (float)(180.0f * (M_PI / 180.0f));
+  float maxAngleH = (float)(30.0f * (M_PI / 180.0f));
 
-// float angularResolutionX = (float)(0.1f * (M_PI / 180.0f)); // divide by 8
-// float angularResolutionY = (float)(0.25f * (M_PI / 180.0f));
-
-// Maximum horizontal and vertical angles. For example, for a full panoramic scan,
-// the first would be 360º. Choosing values that adjust to the real sensor will
-// decrease the time it takes, but don't worry. If the values are bigger than
-// the real ones, the image will be automatically cropped to discard empty zones.
-
-float maxAngleX = (float)(360.0f * (M_PI / 180.0f));
-float maxAngleY = (float)(30.0f * (M_PI / 180.0f));
-
-// float maxAngleX = (float)(60.0f * (M_PI / 180.0f));
-// float maxAngleY = (float)(50.0f * (M_PI / 180.0f));
 
 // Sensor pose. Thankfully, the cloud includes the data.
-Eigen::Affine3f sensorPose = Eigen::Affine3f(Eigen::Translation3f(cloud->sensor_origin_[0],
-cloud->sensor_origin_[1],
-cloud->sensor_origin_[2])) *
-Eigen::Affine3f(cloud->sensor_orientation_);
+// Eigen::Affine3f sensorPose = //Eigen::Affine3f(cloud->sensor_orientation_);
+// Eigen::Affine3f(Eigen::AngleAxisf ((45*M_PI/180.0f), Eigen::Vector3f::UnitZ()));
+Eigen::Affine3f sensorPose = Eigen::Affine3f::Identity ();
+
 
 // Noise level. If greater than 0, values of neighboring points will be averaged.
 // This would set the search radius (e.g., 0.03 == 3cm).
@@ -79,14 +58,13 @@ float minimumRange = 0.0f;
 
 // Border size. If greater than 0, a border of "unobserved" points will be left
 // in the image when it is cropped.
-int borderSize = 1;
+int borderSize = 0;
 
 // Range image object.
-// pcl::RangeImage rangeImage;
-pcl::RangeImageSpherical rangeImage;
+pcl::RangeImage rangeImage;
+// pcl::RangeImageSpherical rangeImage;
 
-rangeImage.createFromPointCloud(*cloud, angularResolutionX, angularResolutionY,
-                                maxAngleX, maxAngleY, sensorPose, pcl::RangeImage::CAMERA_FRAME,
+rangeImage.createFromPointCloud(*cloud, angularResolutionX, maxAngleW, maxAngleH, sensorPose, pcl::RangeImage::CAMERA_FRAME,
                                 noiseLevel, minimumRange, borderSize);
 rangeImage.setUnseenToMaxRange ();
 
@@ -95,12 +73,13 @@ rangeImage.setUnseenToMaxRange ();
 viewer.showRangeImage(rangeImage);
 
 viewer.spinOnce();
-// Sleep 100ms to go easy on the CPU.
+// // Sleep 100ms to go easy on the CPU.
 pcl_sleep(0.1);
 
 
 
 
+pcl::PointCloud<int>::Ptr keypoints_idx(new pcl::PointCloud<int>);
 // Border extractor object.
 pcl::RangeImageBorderExtractor borderExtractor;
 // Keypoint detection object.
@@ -110,11 +89,7 @@ detector.getParameters().support_size = 0.2f;
 
 detector.compute(*keypoints_idx);
 
-// PointCloud::Ptr keypoints_ptr (new PointCloud);
-// PointCloud& keypoints = *keypoints_ptr;
-// keypoints.points.resize (keypoints_idx->points.size ());
-// for (size_t i=0; i<keypoints_idx->points.size (); ++i)
-//   keypoints.points[i].getVector3fMap () = rangeImage.points[keypoints_idx->points[i]].getVector3fMap ();
+
 
 PointCloud::Ptr keypoints (new PointCloud);
 keypoints->points.resize (keypoints_idx->points.size ());
@@ -124,7 +99,7 @@ for (size_t i=0; i<keypoints_idx->points.size (); ++i)
 
   std::cout << "keypoints detected: " << keypoints->size() << std::endl;
 
-  keypoints->header.frame_id = cloud_msg->header.frame_id;
+  keypoints->header.frame_id = cloud->header.frame_id;
 
   pub.publish (keypoints);
 
@@ -138,7 +113,8 @@ main (int argc, char** argv)
   ros::NodeHandle nh;
 
   // Create a ROS subscriber for the input point cloud
-  ros::Subscriber sub = nh.subscribe ("/velodyne_points", 0, cloud_cb);
+  ros::Subscriber sub = nh.subscribe ("/feature_extraction_node/cloud_filt", 0, cloud_cb);
+  // ros::Subscriber sub = nh.subscribe ("/velodyne_points", 0, cloud_cb);
 
   // Create a ROS publisher for the output point cloud
   pub = nh.advertise<PointCloud> ("keypoints", 0);

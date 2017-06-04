@@ -44,6 +44,8 @@ class FeatureExtractionNode
 
     void rotateCloud (const PointCloud &cloud,PointCloud::Ptr transformed_cloud);
 
+    void filterCloud (PointCloud::Ptr cloud);
+
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     

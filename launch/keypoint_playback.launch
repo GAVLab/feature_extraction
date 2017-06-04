@@ -9,7 +9,10 @@
 
   <!-- bagfile playback -->
 <node name="player" pkg="rosbag" type="play" output="screen"
-    args="-l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
+    args="-l -q --clock -r 0.1 $(arg bagpath)/$(arg bagfile)" />
+
+  <!-- <node pkg="feature_extraction" type="narf_node" name="narf_node" output="screen" /> -->
+
 
   <!-- <node pkg="feature_extraction" type="sift_node" name="sift_node" output="screen" /> -->
 
@@ -20,7 +23,7 @@
   	<param name="harris_radius" value="0.5"/>
   	<param name="harris_threshold" value="0.0"/>
   	<param name="z_max" value="2.0"/>
-  	<param name="z_min" value="-0.2"/>
+  	<param name="z_min" value="-1.15"/>
   </node>
 
 
@@ -29,6 +32,6 @@
 
 
 
-  <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/> -->
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/>
 
 </launch>
