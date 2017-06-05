@@ -16,8 +16,8 @@
 // STL
 #include <iostream>
 // PCL
-#include <pcl/io/pcd_io.h>
-#include <boost/thread/thread.hpp>
+// #include <pcl/io/pcd_io.h>
+// #include <boost/thread/thread.hpp>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/keypoints/harris_3d.h>
@@ -52,6 +52,7 @@ class FeatureExtractionNode
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     
     // Publishers
+    ros::Publisher feature_pub; /*!< keypoint publisher */
     ros::Publisher kp_pub; /*!< keypoint publisher */
     ros::Publisher filt_pub; /*!< keypoint publisher */
     ros::Subscriber pc_sub;
@@ -63,9 +64,11 @@ class FeatureExtractionNode
   
     int numThreads;
     bool refine, nonMaxSupression;
-    double radius,threshold,zMin,zMax;
+    double threshold,zMin,zMax,xMin,xMax,yMin,yMax;
 
-    double roll,pitch;
+    int nnNormal,nnKeypoint;
+
+    double roll,pitch,keypointRadius;
 
 };
 
