@@ -19,11 +19,14 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
+#include <pcl/search/kdtree.h>
 #include <pcl/keypoints/harris_3d.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/shot.h>
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/common/transforms.h>
+
+
 
 /*! /brief Primary class for the feature extraction node class
 *
@@ -59,6 +62,8 @@ class FeatureExtractionNode
 
     void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
 
+    void handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointNormalCloud::Ptr pt_normals2d);
+
     void estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
 
     void estimateOtherKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
@@ -84,7 +89,7 @@ class FeatureExtractionNode
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
     double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
     // Normal estimation
-    int nnNormal;                       // number of neighbors used to estimate surface normal
+    double normRadius;                       // number of neighbors used to estimate surface normal
     // Detector
     int kpNumThreads;                   // number of threads in calculating harris keypoints
     bool kpRefine;                      // keypoint refine boolean

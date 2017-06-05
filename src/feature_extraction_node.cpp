@@ -18,7 +18,7 @@ FeatureExtractionNode::FeatureExtractionNode()
   //////////////////////////////////
   /* Normal Estimation Parameters */
   //////////////////////////////////
-  nh.param("normal_number_neighbors", nnNormal, 5);
+  nh.param("normal_radius", normRadius, 0.25);
 
   ///////////////////////////////////
   /* Keypoint Detection Parameters */
@@ -106,24 +106,12 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////
   /* 2D Point Cloud */
   ////////////////////
-  PointCloud::Ptr cloud2d(new PointCloud);
-  *cloud2d = *cloud;
-
-  for(size_t i = 0; i<cloud->points.size(); ++i)
-  {
-    cloud2d->points[i].z = (zMin+zMax)/2.0;
-  }
-
-  NormalCloud::Ptr normals2d(new NormalCloud);
-
-  estimateNormals(cloud2d,normals2d);
-
   PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
 
-  pcl::concatenateFields(*cloud2d, *normals2d, *pt_normals2d);
+  // handle2d (cloud, normals, pt_normals2d);
 
-  pt_normals2d->header.frame_id = msg->header.frame_id;
-  norm2d_pub.publish (pt_normals2d);
+  // pt_normals2d->header.frame_id = msg->header.frame_id;
+  // norm2d_pub.publish (pt_normals2d);
   
   ////////////////////////
   /* Keypoint detection */
@@ -201,8 +189,39 @@ void FeatureExtractionNode::estimateNormals (const PointCloud::Ptr cloud,NormalC
 
   normalEstimation.setInputCloud(cloud);
   normalEstimation.setSearchMethod(kdtree);
-  normalEstimation.setKSearch(nnNormal);
+  normalEstimation.setRadiusSearch(normRadius);
   normalEstimation.compute(*normals);
+}
+
+void FeatureExtractionNode::handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointNormalCloud::Ptr pt_normals2d)
+{
+  PointCloud::Ptr cloud2d(new PointCloud);
+  PointCloud::Ptr cloud2d_clone(new PointCloud);
+  PointCloud::Ptr cloud2d_dbl(new PointCloud);
+
+  *cloud2d = *cloud; // set all fields equal to 3D cloud
+  *cloud2d_clone = *cloud; // same for clone copy
+
+  for(size_t i = 0; i<cloud->points.size(); ++i){
+    cloud2d->points[i].z = (zMin+zMax)/2.0;
+    cloud2d_clone->points[i].z = zMin;
+  }
+
+  // *cloud2d_dbl = *cloud2d + *cloud2d_dbl;
+
+  // NormalCloud::Ptr normals2d_dbl(new NormalCloud);
+
+  // estimateNormals(cloud2d_dbl,normals2d_dbl);
+
+  // NormalCloud::Ptr normals2d(new NormalCloud);
+
+  // for(size_t i = 0; i<cloud2d->points.size(); ++i){
+  //   normals2d->points.push_back(normals2d_dbl->points[i]);
+  // }
+
+  // PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
+  
+  // pcl::concatenateFields(*cloud2d, *normals2d, *pt_normals2d);
 }
 
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints)
@@ -223,6 +242,37 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, cons
   detector.setInputCloud(cloud);
  
   detector.compute (*keypoints);
+
+  // -----
+  // kdtree->setInputCloud(cloud); // do I need this or did detector handle it?
+  
+  // // kdtree->setInputCloud(keypoints); // do I need this or did detector handle it?
+  // // kdtree->setSearchCloud(cloud);
+  
+  // std::vector<int> indices;
+  // std::vector<float> squaredDistances;
+  
+  // // Placeholder for the 3x3 covariance matrix at each surface patch
+  // Eigen::Matrix< float, 3, 3 > covariance_matrix;
+  // // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
+  // Eigen::Vector4f xyz_centroid;
+  
+  // for(size_t i = 0; i<cloud->points.size(); ++i){
+  //   if (kdtree->radiusSearch(cloud->points[i], kpRadius, indices, squaredDistances) > 0)
+  //   {
+  //     PointCloud::Ptr cloud_local(new PointCloud);
+
+  //     // computePointNormal (*cloud, indices, Eigen::Vector4f &plane_parameters, float &curvature);
+  //     for(size_t j = 0; j<indices.size(); ++j)
+  //       cloud_local->points.push_back(cloud->points[j]);
+
+  //     // Estimate the XYZ centroid
+  //     pcl::compute3DCentroid (*cloud_local, xyz_centroid);
+  //     // Compute the 3x3 covariance matrix
+  //     pcl::computeCovarianceMatrix (*cloud_local, xyz_centroid, covariance_matrix);
+      
+  //   }
+  // }
 
 }
 

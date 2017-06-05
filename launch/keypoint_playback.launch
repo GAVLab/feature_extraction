@@ -17,7 +17,7 @@
 
   <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
 
-    <param name="normal_number_neighbors" value="4"/>
+    <param name="normal_radius" value="0.25"/>
 
   	<param name="harris_number_of_threads" value="0"/>
   	<param name="harris_refine" value="false"/>
@@ -46,6 +46,6 @@
 
 
 
-<!-- rosbag record -b 0 -a -x "/usb_cam_node/(.*)|/velodyne(.*)" -o 'ion_gnss_feature' -->
+<!-- rosbag record -b 0 -a -x "/usb_cam_node/(.*)|/velodyne(.*)" -O 'ion_gnss_feature' -->
 
 
