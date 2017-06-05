@@ -40,7 +40,7 @@
 
 
 
-  <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/> -->
+  <node pkg="rviz" type="rviz" name="rviz" args="-d /home/danpierce/devel/lidar_ws/rviz/main_viz.rviz"/>
 
 </launch>
 

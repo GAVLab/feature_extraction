@@ -16,6 +16,7 @@
 // STL
 #include <iostream>
 // PCL
+#include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/keypoints/harris_3d.h>
@@ -45,11 +46,14 @@ class FeatureExtractionNode
 
     void printRosParameters (void);
 
-    void rotateCloud (const PointCloud &cloud,PointCloud::Ptr transformed_cloud);
+    // void rotateCloud (const PointCloud &cloud, PointCloud::Ptr transformed_cloud);
+    void rotateCloud (PointCloud::Ptr cloud);
 
     void filterCloud (PointCloud::Ptr cloud);
 
-    void getKeypointIndices (const PointCloud &cloud);
+    void estimateNormals (const PointCloud::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals);
+
+    void estimateKeypoints (const PointCloud::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, PointCloud::Ptr keypoints);
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
