@@ -34,6 +34,12 @@ class FeatureExtractionNode
     typedef pcl::PointXYZI Point;
     typedef pcl::PointCloud<Point> PointCloud;
 
+    typedef pcl::Normal Normal;
+    typedef pcl::PointCloud<Normal> NormalCloud;
+
+    typedef pcl::PointXYZINormal PointNormal;
+    typedef pcl::PointCloud<PointNormal> PointNormalCloud;
+
     typedef pcl::SHOT352 Descriptor;
     typedef pcl::PointCloud<Descriptor> DescriptorCloud;
     
@@ -51,9 +57,13 @@ class FeatureExtractionNode
 
     void filterCloud (PointCloud::Ptr cloud);
 
-    void estimateNormals (const PointCloud::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals);
+    void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
 
-    void estimateKeypoints (const PointCloud::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, PointCloud::Ptr keypoints);
+    void estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
+
+    void estimateOtherKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
+
+    void estimateDescriptors (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
@@ -62,6 +72,8 @@ class FeatureExtractionNode
     ros::Publisher feature_pub;         // Feature publisher
     ros::Publisher kp_pub;              // Keypoint publisher
     ros::Publisher filt_pub;            // Filtered point cloud publisher
+    ros::Publisher norm_pub;           
+    ros::Publisher norm2d_pub;           
 
     // --- Subscribers
     ros::Subscriber pc_sub;             // Point cloud subscriber
