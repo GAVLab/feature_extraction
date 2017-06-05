@@ -16,8 +16,6 @@
 // STL
 #include <iostream>
 // PCL
-// #include <pcl/io/pcd_io.h>
-// #include <boost/thread/thread.hpp>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/keypoints/harris_3d.h>
@@ -32,15 +30,20 @@
 class FeatureExtractionNode
 {
 
-    typedef pcl::PointCloud<pcl::PointXYZI> PointCloud;
     typedef pcl::PointXYZI Point;
+    typedef pcl::PointCloud<Point> PointCloud;
 
+    typedef pcl::SHOT352 Descriptor;
+    typedef pcl::PointCloud<Descriptor> DescriptorCloud;
+    
   public:
 
     FeatureExtractionNode();
     ~FeatureExtractionNode();
 
   private:
+
+    void printRosParameters (void);
 
     void rotateCloud (const PointCloud &cloud,PointCloud::Ptr transformed_cloud);
 
@@ -51,24 +54,30 @@ class FeatureExtractionNode
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     
-    // Publishers
-    ros::Publisher feature_pub; /*!< keypoint publisher */
-    ros::Publisher kp_pub; /*!< keypoint publisher */
-    ros::Publisher filt_pub; /*!< keypoint publisher */
-    ros::Subscriber pc_sub;
-    
-    ros::Subscriber imu_sub;
-    
-    // // Instance of Harris detector
-    // pcl::HarrisKeypoint3D<pcl::PointXYZI,pcl::PointXYZI> detector;
-  
-    int numThreads;
-    bool refine, nonMaxSupression;
-    double threshold,zMin,zMax,xMin,xMax,yMin,yMax;
+    // --- Publisher
+    ros::Publisher feature_pub;         // Feature publisher
+    ros::Publisher kp_pub;              // Keypoint publisher
+    ros::Publisher filt_pub;            // Filtered point cloud publisher
 
-    int nnNormal,nnKeypoint;
+    // --- Subscribers
+    ros::Subscriber pc_sub;             // Point cloud subscriber
+    ros::Subscriber imu_sub;            // IMU subscriber (for roll/pitch)
+    
+    // --- Class variables
+    // Pass through filter
+    double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
+    double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
+    // Normal estimation
+    int nnNormal;                       // number of neighbors used to estimate surface normal
+    // Detector
+    int kpNumThreads;                   // number of threads in calculating harris keypoints
+    bool kpRefine;                      // keypoint refine boolean
+    bool kpNonMaxSupression;            // keypoint detection non max supression boolean
+    double kpThreshold;                 // keypoint detection threshold for non max supression 
+    double kpRadius;                    // radius (in meters) for gathering neighbors
+    
+    // Descriptor
 
-    double roll,pitch,keypointRadius;
 
 };
 
