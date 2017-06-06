@@ -22,11 +22,15 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS})
 
 
-add_executable(narf_node src/narf_node.cpp)
-target_link_libraries(narf_node ${catkin_LIBRARIES})
+# add_executable(narf_node src/narf_node.cpp)
+# target_link_libraries(narf_node ${catkin_LIBRARIES})
 
-add_executable(sift_node src/sift_node.cpp)
-target_link_libraries(sift_node ${catkin_LIBRARIES})
+# add_executable(sift_node src/sift_node.cpp)
+# target_link_libraries(sift_node ${catkin_LIBRARIES})
+
+add_executable(pcl_tune src/pcl_tune.cpp)
+target_link_libraries(pcl_tune ${catkin_LIBRARIES} ${PCL_LIBRARIES} libvtkCommon.so libvtkFiltering.so )
+
 
 add_executable(feature_extraction_node src/feature_extraction_node.cpp include/${PROJECT_NAME}/feature_extraction_node.h)
 target_link_libraries(feature_extraction_node ${catkin_LIBRARIES})

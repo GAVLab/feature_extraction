@@ -2,6 +2,7 @@
 
 FeatureExtractionNode::FeatureExtractionNode()
 {
+  init = false;
 
   ros::NodeHandle nh("~");
 
@@ -88,6 +89,16 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
 
   cloud->header.frame_id = msg->header.frame_id;
   filt_pub.publish (cloud);
+
+  if (!init){
+    init=true;
+    
+    // Write it back to disk under a different name.
+    // Another possibility would be "savePCDFileBinary()".
+    pcl::io::savePCDFileASCII("output.pcd", *cloud);
+
+  }
+
 
   /////////////////////////////
   /* Point Normal Estimation */

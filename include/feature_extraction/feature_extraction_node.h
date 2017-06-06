@@ -27,6 +27,7 @@
 #include <pcl/common/transforms.h>
 
 
+#include <pcl/io/pcd_io.h>
 
 /*! /brief Primary class for the feature extraction node class
 *
@@ -97,6 +98,7 @@ class FeatureExtractionNode
     double kpThreshold;                 // keypoint detection threshold for non max supression 
     double kpRadius;                    // radius (in meters) for gathering neighbors
     
+    bool init;
     // Descriptor
 
 
