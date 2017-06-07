@@ -52,14 +52,14 @@ class FeatureExtractionNode
     FeatureExtractionNode();
     ~FeatureExtractionNode();
 
+    void filterCloud (PointCloud::Ptr cloud);
+
   private:
 
     void printRosParameters (void);
 
     // void rotateCloud (const PointCloud &cloud, PointCloud::Ptr transformed_cloud);
     void rotateCloud (PointCloud::Ptr cloud);
-
-    void filterCloud (PointCloud::Ptr cloud);
 
     void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
 

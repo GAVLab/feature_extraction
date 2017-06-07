@@ -2,6 +2,7 @@
 #include <ros/ros.h>
 // STL
 #include <iostream>
+#include <sstream>
 // PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -18,21 +19,13 @@
 #include <boost/thread/thread.hpp>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/console/parse.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 class PclTune
 {
 
     typedef pcl::PointXYZI Point;
     typedef pcl::PointCloud<Point> PointCloud;
-
-    typedef pcl::Normal Normal;
-    typedef pcl::PointCloud<Normal> NormalCloud;
-
-    typedef pcl::PointXYZINormal PointNormal;
-    typedef pcl::PointCloud<PointNormal> PointNormalCloud;
-
-    typedef pcl::SHOT352 Descriptor;
-    typedef pcl::PointCloud<Descriptor> DescriptorCloud;
     
   public:
 
@@ -41,33 +34,25 @@ class PclTune
 
   private:
     
-    int prmIdx;
+    int prmIdx,maxNumClusters;
 
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
-    double normRadius;
 
     // Detector
-    int kpNumThreads;                   // number of threads in calculating harris keypoints
-    bool kpRefine;                      // keypoint refine boolean
-    bool kpNonMaxSupression;            // keypoint detection non max supression boolean
-    double kpThreshold;                 // keypoint detection threshold for non max supression 
-    double kpRadius;                    // radius (in meters) for gathering neighbors
-    
+    double clusterTolerance;
+    int clusterMinCount,clusterMaxCount;
+
     std::string pcdPath;
 
     boost::shared_ptr<pcl::visualization::PCLVisualizer> createViewer ();
 
     void keyboardCallback (const pcl::visualization::KeyboardEvent &event, void* viewer_void);
 
-    void processCloud (const PointCloud::Ptr cloud_in, PointCloud::Ptr cloud_out, NormalCloud::Ptr normals_out, PointCloud::Ptr keypoints_out);
+    void processCloud (PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters, PointCloud::Ptr keypoints);
 
     void filterCloud (PointCloud::Ptr cloud);
 
-    void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
-
-    void estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
-
-    void handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d);
+    void segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters);
 
 };
 
@@ -85,21 +70,16 @@ PclTune::PclTune(char** argv)
   nh.param("z_min", zMin, -1.15);
   nh.param("z_max", zMax, 2.0);
 
-  //////////////////////////////////
-  /* Normal Estimation Parameters */
-  //////////////////////////////////
-  nh.param("normal_radius", normRadius, 0.5);
-
-  ///////////////////////////////////
-  /* Keypoint Detection Parameters */
-  ///////////////////////////////////
-  nh.param("harris_number_of_threads", kpNumThreads, 0);
-  nh.param("harris_refine", kpRefine, false);
-  nh.param("harris_non_max_supression", kpNonMaxSupression, true);
-  nh.param("harris_radius", kpRadius, 1.0);
-  nh.param("harris_threshold", kpThreshold, 0.1);
+  /////////////////////////////
+  /* Segmentation Parameters */
+  /////////////////////////////
+  nh.param("cluster_tolerance", clusterTolerance, 1.2);
+  nh.param("cluster_min_count", clusterMinCount, 10);
+  nh.param("cluster_max_count", clusterMaxCount, 250);
 
   prmIdx = 1;
+
+  maxNumClusters = 20;
   
   pcdPath = argv[1];
   
@@ -116,48 +96,23 @@ PclTune::PclTune(char** argv)
 PclTune::~PclTune(){}
 
 
-void PclTune::processCloud (const PointCloud::Ptr cloud_in, PointCloud::Ptr cloud_out, NormalCloud::Ptr normals_out, PointCloud::Ptr keypoints_out){
+void PclTune::processCloud (PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters, PointCloud::Ptr keypoints){
 
-  PointCloud::Ptr cloud(new PointCloud);
+  PointCloud::Ptr cloud_full(new PointCloud);
 
-  *cloud = *cloud_in;
+  //////////////////////
+  /* Load Point Cloud */
+  //////////////////////
+  pcl::io::loadPCDFile<Point>(pcdPath, *cloud_full);
+
+  *cloud = *cloud_full;
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
   filterCloud(cloud);
 
-  /////////////////////////////
-  /* Point Normal Estimation */
-  /////////////////////////////
-  NormalCloud::Ptr normals(new NormalCloud);
-  estimateNormals(cloud,normals);
+  segmentCloud(cloud,clusters);
 
-  std::cout << "\tcloud size:" << cloud->points.size() << std::endl;
-
-  ////////////////////
-  /* 2D Point Cloud */
-  ////////////////////
-  PointCloud::Ptr cloud2d(new PointCloud);
-  NormalCloud::Ptr normals2d(new NormalCloud);
-  PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
-  handle2d (cloud,normals,cloud2d,normals2d,pt_normals2d);
-
-  std::cout << "\tcloud2d size:" << cloud2d->points.size() << std::endl;
-
-  ////////////////////////
-  /* Keypoint detection */
-  ////////////////////////
-  PointCloud::Ptr keypoints(new PointCloud());
-
-  estimateKeypoints(cloud,normals,keypoints);
-  // estimateKeypoints(cloud2d,normals2d,keypoints);
-
-  ////////////////
-  /* Set output */
-  ////////////////
-  *cloud_out = *cloud2d;
-  *normals_out = *normals2d;
-  *keypoints_out = *keypoints;
 }
 
 boost::shared_ptr<pcl::visualization::PCLVisualizer> PclTune::createViewer ()
@@ -167,30 +122,23 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> PclTune::createViewer ()
   
   viewer->registerKeyboardCallback(&PclTune::keyboardCallback, *this, viewer.get());
 
-
   PointCloud::Ptr cloud(new PointCloud);
-  PointCloud::Ptr cloud2d(new PointCloud);
-  NormalCloud::Ptr normals2d(new NormalCloud);
   PointCloud::Ptr keypoints(new PointCloud);
+  std::vector<pcl::PointIndices> clusters;
 
-  //////////////////////
-  /* Load Point Cloud */
-  //////////////////////
-  pcl::io::loadPCDFile<Point>(pcdPath, *cloud);
-
-  processCloud(cloud,cloud2d,normals2d,keypoints);
+  processCloud(cloud,clusters,keypoints);
 
 
-  viewer->addPointCloud<Point>(cloud2d, "cloud");
-
-
-  viewer->addPointCloudNormals<Point, Normal>(cloud2d, normals2d, 1, 0.5, "normals");// Display one normal out of 20, as a line of length 3cm.
-
-  pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(keypoints, 246, 128, 38);
-  viewer->addPointCloud<Point>(keypoints, single_color, "keypoints");
-  viewer->setPointCloudRenderingProperties
-  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "keypoints");
-
+  
+  viewer->addPointCloud<Point>(cloud, "cloud");
+  
+  std::stringstream ss;
+  for (int i=0;i<maxNumClusters;++i){
+    ss << "cluster" << i;
+    viewer->addPointCloud<Point>(cloud, ss.str() );
+    ss.str("");
+  }
+    
   return (viewer);
 }
 
@@ -200,12 +148,10 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
   
   int adjDir = 0;
 
-  double prm_step[] = {0.05, // normRadius
-                       0.001, // kpThreshold
-                       0.05, // kpRadius
-                       0.025, // zMin
-                       0.025}; // zMax
-
+  double prm_step[] = {0.05, // clusterTolerance
+                       1, // clusterMinCount
+                       1}; // clusterMaxCount
+                       
   int nPrm = (int) sizeof(prm_step)/sizeof(prm_step[0]);
 
   if (event.keyDown ()){
@@ -232,30 +178,27 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
     
     switch (prmIdx){
       case 0:
-        normRadius += prm_step[prmIdx]*( (double) adjDir );
-        std::cout << std::endl << "normRadius = " << normRadius << std::endl << std::endl;
+        clusterTolerance += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "clusterTolerance = " << clusterTolerance << std::endl << std::endl;
         break;
       case 1:
-        kpThreshold += prm_step[prmIdx]*( (double) adjDir );
-        std::cout << std::endl << "kpThreshold = " << kpThreshold << std::endl << std::endl;
+        clusterMinCount += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "clusterMinCount = " << clusterMinCount << std::endl << std::endl;
         break;
       case 2:
-        kpRadius += prm_step[prmIdx]*( (double) adjDir );
-        std::cout << std::endl << "kpRadius = " << kpRadius << std::endl << std::endl;
-        break;
-      case 3:
-        zMin += prm_step[prmIdx]*( (double) adjDir );
-        std::cout << std::endl << "zMin = " << zMin << std::endl << std::endl;
-        break;
-      case 4:
-        zMax += prm_step[prmIdx]*( (double) adjDir );
-        std::cout << std::endl << "zMax = " << zMax << std::endl << std::endl;
+        clusterMaxCount += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "clusterMaxCount = " << clusterMaxCount << std::endl << std::endl;
         break;
 
     }
 
 
-
+    std::stringstream ss;
+    for (int i=0;i<maxNumClusters;++i){
+      ss << "cluster" << i;
+      viewer->removePointCloud(ss.str(),0);
+      ss.str("");
+    }
 
 
 
@@ -263,36 +206,93 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
 
     
     PointCloud::Ptr cloud(new PointCloud);
-    PointCloud::Ptr cloud2d(new PointCloud);
-    NormalCloud::Ptr normals2d(new NormalCloud);
     PointCloud::Ptr keypoints(new PointCloud);
+    std::vector<pcl::PointIndices> clusters;
 
-    //////////////////////
-    /* Load Point Cloud */
-    //////////////////////
-    pcl::io::loadPCDFile<Point>(pcdPath, *cloud);
+    processCloud(cloud,clusters,keypoints);
 
-    processCloud(cloud,cloud2d,normals2d,keypoints);
+    int numClusters = clusters.size();
+  
+    // std::cout << << numClusters << std::endl;
 
-    std::cout << "\tkeypoints size:" << keypoints->points.size() << std::endl;
+    if (numClusters<=0)
+      return;
 
+    std::vector<int> red (numClusters);
+    std::vector<int> blue (numClusters);
+    std::vector<int> green (numClusters);
 
-    // Point cloud
-    viewer->updatePointCloud<Point>(cloud2d, "cloud");
+    int step = (int) 255/(numClusters+1);
 
+    for (int i = 0; i < numClusters; ++i){
+      red[i] = (i+1)*step;
+      green[i] = (i%2)*255;
+      blue[i] = (numClusters-i)*step;
+      std::cout << "green[i] = " << green[i] << std::endl;
+      
+    }
+    
+    // For every cluster.
+    int clusterId = 0;
+    for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
+    {
+      // ...add all its points to a new cloud...
+      PointCloud::Ptr cluster(new PointCloud);
 
-    // Keypoints
-    viewer->removePointCloud("keypoints", 0);
-    pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(keypoints, 246, 128, 38);
-    viewer->addPointCloud<Point>(keypoints, single_color, "keypoints");
-    viewer->setPointCloudRenderingProperties
-    (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "keypoints");
+      for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
+        cluster->points.push_back(cloud->points[*point]);
+      
+      cluster->width = cluster->points.size();
+      cluster->height = 1;
+      cluster->is_dense = true;
 
-    // Normals
-    viewer->removePointCloud("normals", 0);
-    viewer->addPointCloudNormals<Point, Normal>(cloud2d, normals2d, 1, 0.5, "normals");
+      if (cluster->points.size() <= 0)
+        break;
+      std::cout << "Cluster " << clusterId << " has " << cluster->points.size() << " points." << std::endl;
+      
+
+      //
+      ss << "cluster" << clusterId;
+      
+      pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cluster, red[clusterId], green[clusterId], blue[clusterId]);
+
+      viewer->addPointCloud<Point>(cluster,single_color, ss.str() );
+      viewer->setPointCloudRenderingProperties
+      (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, ss.str());
+
+      ss.str("");
+
+      clusterId++;
+    }
 
   }
+
+}
+
+void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters)
+{
+
+  // kd-tree object for searches.
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
+  kdtree->setInputCloud(cloud);
+
+  // Euclidean clustering object.
+  pcl::EuclideanClusterExtraction<Point> clustering;
+
+  // Set cluster tolerance to 2cm (small values may cause objects to be divided
+  // in several clusters, whereas big values may join objects in a same cluster).
+  clustering.setClusterTolerance(clusterTolerance);
+  // Set the minimum and maximum number of points that a cluster can have.
+  clustering.setMinClusterSize(clusterMinCount);
+  clustering.setMaxClusterSize(clusterMaxCount);
+  clustering.setSearchMethod(kdtree);
+  clustering.setInputCloud(cloud);
+
+  clustering.extract(clusters);
+
+  int numClusters = clusters.size();
+  std::cout << numClusters << std::endl;
+
 
 }
 
@@ -323,71 +323,6 @@ filter.setFilterFieldName("y");
 filter.setFilterLimits(-1.0, 1.0);
 filter.filter(*cloud);
 
-}
-
-void PclTune::estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals)
-{
-  pcl::NormalEstimation<Point, Normal> normalEstimation;
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-
-  normalEstimation.setInputCloud(cloud);
-  normalEstimation.setSearchMethod(kdtree);
-  normalEstimation.setRadiusSearch(normRadius);
-  normalEstimation.compute(*normals);
-}
-
-void PclTune::handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d)
-{
-  PointCloud::Ptr cloud2d_lo(new PointCloud);
-  PointCloud::Ptr cloud2d_hi(new PointCloud);
-  PointCloud::Ptr cloud2d_full(new PointCloud);
-  NormalCloud::Ptr normals2d_full(new NormalCloud);
-
-  *cloud2d = *cloud; // set all fields equal to 3D cloud
-  *cloud2d_lo = *cloud; // same for clone copy
-  *cloud2d_hi = *cloud; // same for clone copy
-
-  float zNom = (zMin+zMax)/2.0;
-  float zLo = zNom - normRadius/2.0;
-  float zHi = zNom + normRadius/2.0;
-  
-  for(size_t i = 0; i<cloud->points.size(); ++i){
-    cloud2d->points[i].z = zNom;
-    cloud2d_lo->points[i].z = zLo;
-    cloud2d_hi->points[i].z = zHi;
-  }
-
-  *cloud2d_full = *cloud2d + *cloud2d_lo;
-
-  *cloud2d_full = *cloud2d_full + *cloud2d_hi;
-
-  estimateNormals(cloud2d_full,normals2d_full);
-
-  // for(size_t i = 0; i<cloud2d_full->points.size(); ++i){normals2d->points.push_back(normals2d_full->points[i]);}
-  // *cloud2d = *cloud2d_full;
-
-  for(size_t i = 0; i<cloud2d->points.size(); ++i){normals2d->points.push_back(normals2d_full->points[i]);}
-
-}
-
-void PclTune::estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints)
-{
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-  pcl::HarrisKeypoint3D <Point, Point> detector;
-  
-  detector.setSearchMethod(kdtree); // set pointer to the kD tree
-  //detector.setKSearch(nnKeypoint); // number of neighbors to gather (for normal estimation or non max suppression?)
-  detector.setNormals(normals);
-
-  detector.setNumberOfThreads(kpNumThreads);
-  detector.setRefine(kpRefine);
-  detector.setNonMaxSupression(kpNonMaxSupression); 
-  detector.setRadius(kpRadius); 
-
-  detector.setThreshold(kpThreshold); 
-  detector.setInputCloud(cloud);
- 
-  detector.compute (*keypoints);
 }
 
 int main (int argc, char** argv)

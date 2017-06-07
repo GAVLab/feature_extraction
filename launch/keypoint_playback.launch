@@ -32,8 +32,11 @@
     <param name="y_min" value="-25.0"/>
     <!-- <param name="z_max" value="-0.5"/> -->
     <!-- <param name="z_min" value="-1.0"/> -->
-    <param name="z_max" value="0.87"/>
-    <param name="z_min" value="-0.87"/>
+    <!-- <param name="z_max" value="0.87"/> -->
+    <!-- <param name="z_min" value="-0.87"/> -->
+
+    <param name="z_max" value="1.87"/>
+    <param name="z_min" value="0.13"/>
 
   </node>
 
