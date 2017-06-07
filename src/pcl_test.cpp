@@ -15,6 +15,9 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/conditional_euclidean_clustering.h>
 
+#include <pcl/features/normal_3d.h>
+#include <pcl/features/spin_image.h>
+
 bool enforceIntensitySimilarity (const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
 {
   if (fabs (point_a.intensity - point_b.intensity) < 0.1f)
@@ -29,6 +32,12 @@ class PclTest
     typedef pcl::PointXYZI Point;
     typedef pcl::PointCloud<Point> PointCloud;
     
+    typedef pcl::Normal Normal;
+    typedef pcl::PointCloud<Normal> NormalCloud;
+
+    typedef pcl::Histogram<153> Descriptor;
+    typedef pcl::PointCloud<Descriptor> DescriptorCloud;
+
   public:
 
     PclTest(char** argv);
@@ -41,6 +50,11 @@ class PclTest
     std::string pcdPath;
 
     void segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters);
+
+
+    void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
+
+
 
 };
 
@@ -64,6 +78,31 @@ PclTest::PclTest(char** argv)
 
   segmentCloud(cloud,clusters);
 
+}
+
+void PclTest::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
+{
+
+  NormalCloud::Ptr normals(new NormalCloud);
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
+
+  // Setup spin image computation
+  pcl::SpinImageEstimation<Point, pcl::Normal, Descriptor > spin_image_descriptor(8, 0.5, 16);
+  spin_image_descriptor.setInputCloud (cloud);
+  spin_image_descriptor.setInputNormals (normals);
+
+  // Use the same KdTree from the normal estimation
+  spin_image_descriptor.setSearchMethod (kdtree);
+  DescriptorCloud::Ptr spin_images (new DescriptorCloud);
+  spin_image_descriptor.setRadiusSearch (0.2);
+
+  // Actually compute the spin images
+  spin_image_descriptor.compute (*spin_images);
+  std::cout << "SI output points.size (): " << spin_images->points.size () << std::endl;
+
+  // Display and retrieve the spin image descriptor vector for the first point.
+  Descriptor first_descriptor = spin_images->points[0];
+  std::cout << first_descriptor << std::endl;
 }
 
 PclTest::~PclTest(){}

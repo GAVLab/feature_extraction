@@ -104,16 +104,15 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   kp_pub.publish (keypoints);
 
   /////////////////////
-  /* SHOT Descriptor */
+  /* Descriptor */
   /////////////////////
   DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
   estimateDescriptors(cloud,keypoints,descriptors);
-  
-  descriptors->header.frame_id = msg->header.frame_id;
+
   feature_pub.publish(descriptors);
 
-  pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
+  //pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
 }
 
@@ -243,20 +242,45 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
 
 void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
 {
+  if (keypoints->points.size()<=0)
+    return;
+
   NormalCloud::Ptr normals(new NormalCloud);
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
 
-  estimateNormals(cloud,normals);
+  // Setup spin image computation
+  pcl::SpinImageEstimation<Point, Normal, SpinImage > si;//(8, 0.5, 16); // (image_width,support_angle_cos,min_pts_neighb)
+  si.setInputCloud (keypoints);
+  si.setSearchSurface (cloud);
 
-  pcl::SHOTEstimation<Point, Normal, Descriptor> shot;
+  Normal axis;
+  axis.normal_x = 0.0f; axis.normal_y = 0.0f; axis.normal_z = 1.0f;
 
-  shot.setInputCloud(keypoints);
-  shot.setSearchSurface(cloud);
-  shot.setInputNormals(normals);
-  shot.setRadiusSearch(descriptorRadius);
+  si.setRotationAxis(axis);
 
-  //shot.setKSearch(50);
-  
-  shot.compute(*descriptors);
+  for (int i = 0; i<keypoints->points.size(); ++i)
+    normals->points.push_back(axis);
+  si.setInputNormals(normals);
+
+  // Use the same KdTree from the normal estimation
+  si.setSearchMethod (kdtree);
+  SpinImageCloud::Ptr spin_images (new SpinImageCloud);
+  si.setRadiusSearch (descriptorRadius);
+
+  si.setImageWidth(8);
+
+  // Actually compute the spin images
+  si.compute (*spin_images);
+
+  int histLength = 153;
+
+  Descriptor descriptor;
+  for (int i = 0; i<spin_images->points.size(); ++i){
+    for (int ii = 0; ii<histLength; ++ii)
+      descriptor.descriptor[ii] = spin_images->points[i].histogram[ii];
+    descriptors->points.push_back(descriptor);
+  }
+
 }
 
 void FeatureExtractionNode::printRosParameters (void)
