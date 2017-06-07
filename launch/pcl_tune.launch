@@ -1,0 +1,32 @@
+<launch>
+
+  <node pkg="feature_extraction" type="pcl_tune" name="pcl_tune" output="screen" args="/home/danpierce/devel/lidar_ws/data/output_full.pcd" >
+
+    <param name="normal_radius" value="0.4"/>
+
+  	<param name="harris_number_of_threads" value="0"/>
+  	<param name="harris_refine" value="false"/>
+  	<param name="harris_non_max_supression" value="true"/>
+
+  	<param name="harris_radius" value="2.0"/>
+  	<param name="harris_threshold" value="0.0"/>
+
+    <param name="x_max" value="50.0"/>
+    <param name="x_min" value="0.0"/>
+    <param name="y_max" value="25.0"/>
+    <param name="y_min" value="-25.0"/>
+
+  	<!-- <param name="z_max" value="-0.5"/> -->
+  	<!-- <param name="z_min" value="-1.0"/> -->
+
+    <param name="z_max" value="0.87"/>
+    <param name="z_min" value="-0.87"/>
+  </node>
+
+</launch>
+
+
+
+<!-- rosbag record -b 0 -a -x "/usb_cam_node/(.*)|/velodyne(.*)" -O 'ion_gnss_feature' -->
+
+

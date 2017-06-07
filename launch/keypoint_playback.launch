@@ -25,12 +25,15 @@
 
   	<param name="harris_radius" value="2.0"/>
   	<param name="harris_threshold" value="0.0"/>
-    <param name="x_max" value="25.0"/>
-    <param name="x_min" value="-1.15"/>
+
+    <param name="x_max" value="50.0"/>
+    <param name="x_min" value="0.0"/>
     <param name="y_max" value="25.0"/>
     <param name="y_min" value="-25.0"/>
-  	<param name="z_max" value="2.0"/>
-  	<param name="z_min" value="-1.15"/>
+    <!-- <param name="z_max" value="-0.5"/> -->
+    <!-- <param name="z_min" value="-1.0"/> -->
+    <param name="z_max" value="0.87"/>
+    <param name="z_min" value="-0.87"/>
 
   </node>
 
@@ -46,6 +49,6 @@
 
 
 
-<!-- rosbag record -b 0 -a -x "/usb_cam_node/(.*)|/velodyne(.*)" -O 'ion_gnss_feature' -->
+<!-- rosbag record -b 0 -a -x "/usb_cam_node/(.*)|/velodyne(.*)" -O 'ion_gnss_with_normals2d' -->
 
 

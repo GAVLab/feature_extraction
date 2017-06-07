@@ -82,6 +82,11 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////
   rotateCloud(cloud);
 
+  if (!init){
+    init=true;
+    pcl::io::savePCDFileASCII("output.pcd", *cloud);
+  }
+
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
@@ -89,16 +94,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
 
   cloud->header.frame_id = msg->header.frame_id;
   filt_pub.publish (cloud);
-
-  if (!init){
-    init=true;
-    
-    // Write it back to disk under a different name.
-    // Another possibility would be "savePCDFileBinary()".
-    pcl::io::savePCDFileASCII("output.pcd", *cloud);
-
-  }
-
 
   /////////////////////////////
   /* Point Normal Estimation */
@@ -117,12 +112,14 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////
   /* 2D Point Cloud */
   ////////////////////
+  PointCloud::Ptr cloud2d(new PointCloud);
+  NormalCloud::Ptr normals2d(new NormalCloud);
   PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
 
-  // handle2d (cloud, normals, pt_normals2d);
+  handle2d(cloud,normals,cloud2d,normals2d,pt_normals2d);
 
-  // pt_normals2d->header.frame_id = msg->header.frame_id;
-  // norm2d_pub.publish (pt_normals2d);
+  pt_normals2d->header.frame_id = msg->header.frame_id;
+  norm2d_pub.publish (pt_normals2d);
   
   ////////////////////////
   /* Keypoint detection */
@@ -204,35 +201,36 @@ void FeatureExtractionNode::estimateNormals (const PointCloud::Ptr cloud,NormalC
   normalEstimation.compute(*normals);
 }
 
-void FeatureExtractionNode::handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointNormalCloud::Ptr pt_normals2d)
+void FeatureExtractionNode::handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d)
 {
-  PointCloud::Ptr cloud2d(new PointCloud);
-  PointCloud::Ptr cloud2d_clone(new PointCloud);
-  PointCloud::Ptr cloud2d_dbl(new PointCloud);
+  PointCloud::Ptr cloud2d_lo(new PointCloud);
+  PointCloud::Ptr cloud2d_hi(new PointCloud);
+  PointCloud::Ptr cloud2d_full(new PointCloud);
+  NormalCloud::Ptr normals2d_full(new NormalCloud);
 
   *cloud2d = *cloud; // set all fields equal to 3D cloud
-  *cloud2d_clone = *cloud; // same for clone copy
+  *cloud2d_lo = *cloud; // same for clone copy
+  *cloud2d_hi = *cloud; // same for clone copy
 
+  float zNom = (zMin+zMax)/2.0;
+  float zLo = zNom - normRadius/2.0;
+  float zHi = zNom + normRadius/2.0;
+  
   for(size_t i = 0; i<cloud->points.size(); ++i){
-    cloud2d->points[i].z = (zMin+zMax)/2.0;
-    cloud2d_clone->points[i].z = zMin;
+    cloud2d->points[i].z = zNom;
+    cloud2d_lo->points[i].z = zLo;
+    cloud2d_hi->points[i].z = zHi;
   }
 
-  // *cloud2d_dbl = *cloud2d + *cloud2d_dbl;
+  *cloud2d_full = *cloud2d + *cloud2d_lo;
 
-  // NormalCloud::Ptr normals2d_dbl(new NormalCloud);
+  *cloud2d_full = *cloud2d_full + *cloud2d_hi;
 
-  // estimateNormals(cloud2d_dbl,normals2d_dbl);
+  estimateNormals(cloud2d_full,normals2d_full);
 
-  // NormalCloud::Ptr normals2d(new NormalCloud);
+  for(size_t i = 0; i<cloud2d->points.size(); ++i){normals2d->points.push_back(normals2d_full->points[i]);}
 
-  // for(size_t i = 0; i<cloud2d->points.size(); ++i){
-  //   normals2d->points.push_back(normals2d_dbl->points[i]);
-  // }
-
-  // PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
-  
-  // pcl::concatenateFields(*cloud2d, *normals2d, *pt_normals2d);
+  pcl::concatenateFields(*cloud2d, *normals2d, *pt_normals2d);
 }
 
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints)

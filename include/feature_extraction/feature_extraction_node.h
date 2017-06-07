@@ -63,7 +63,7 @@ class FeatureExtractionNode
 
     void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
 
-    void handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointNormalCloud::Ptr pt_normals2d);
+    void handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d);
 
     void estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
 
