@@ -1,41 +1,29 @@
 <launch>
 
- <!-- /home/danpierce/devel/lidar_ws/data/velodyne_bag_1min_2017-05-22-12-05-38.bag -->
+  <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
 
-<arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
-<!-- <arg name="bagfile" default="ion_gnss_forestry_loop_gps_imu_only.bag"/> -->
-
-<arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/>
+  <arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/>
 
   <!-- bagfile playback -->
-<node name="player" pkg="rosbag" type="play" output="screen"
-    args="-l -q --clock -r 0.1 $(arg bagpath)/$(arg bagfile)" />
+  <node name="player" pkg="rosbag" type="play" output="screen"
+    args="-l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
 
-  <!-- <node pkg="feature_extraction" type="narf_node" name="narf_node" output="screen" /> -->
-
-  <!-- <node pkg="feature_extraction" type="sift_node" name="sift_node" output="screen" /> -->
 
   <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
 
-    <param name="normal_radius" value="0.25"/>
+    <param name="normal_radius" value="0.4"/>
 
-  	<param name="harris_number_of_threads" value="0"/>
-  	<param name="harris_refine" value="false"/>
-  	<param name="harris_non_max_supression" value="true"/>
-
-  	<param name="harris_radius" value="2.0"/>
-  	<param name="harris_threshold" value="0.0"/>
+  	<param name="cluster_tolerance" value="1.2"/>
+    <param name="cluster_min_count" value="5"/>
+    <param name="cluster_max_count" value="50"/>
+    <param name="cluster_radius_threshold" value="0.5"/>
 
     <param name="x_max" value="50.0"/>
     <param name="x_min" value="0.0"/>
     <param name="y_max" value="25.0"/>
     <param name="y_min" value="-25.0"/>
-    <!-- <param name="z_max" value="-0.5"/> -->
-    <!-- <param name="z_min" value="-1.0"/> -->
-    <!-- <param name="z_max" value="0.87"/> -->
-    <!-- <param name="z_min" value="-0.87"/> -->
-
-    <param name="z_max" value="1.87"/>
+    
+    <param name="z_max" value="2.5"/>
     <param name="z_min" value="0.13"/>
 
   </node>

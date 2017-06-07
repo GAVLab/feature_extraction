@@ -19,21 +19,25 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
-#include <pcl/search/kdtree.h>
-#include <pcl/keypoints/harris_3d.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/shot.h>
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/common/transforms.h>
+#include <pcl/filters/passthrough.h>
 
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/segmentation/conditional_euclidean_clustering.h>
 
-#include <pcl/io/pcd_io.h>
+// #include <pcl/io/pcd_io.h>
+#include <pcl/common/time.h>
 
 /*! /brief Primary class for the feature extraction node class
 *
 */
 class FeatureExtractionNode
 {
+
+  public:
 
     typedef pcl::PointXYZI Point;
     typedef pcl::PointCloud<Point> PointCloud;
@@ -47,8 +51,6 @@ class FeatureExtractionNode
     typedef pcl::SHOT352 Descriptor;
     typedef pcl::PointCloud<Descriptor> DescriptorCloud;
     
-  public:
-
     FeatureExtractionNode();
     ~FeatureExtractionNode();
 
@@ -58,18 +60,13 @@ class FeatureExtractionNode
 
     void printRosParameters (void);
 
-    // void rotateCloud (const PointCloud &cloud, PointCloud::Ptr transformed_cloud);
     void rotateCloud (PointCloud::Ptr cloud);
 
     void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
 
-    void handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d);
+    void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
-    void estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
-
-    void estimateOtherKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints);
-
-    void estimateDescriptors (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
+    void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
@@ -78,8 +75,6 @@ class FeatureExtractionNode
     ros::Publisher feature_pub;         // Feature publisher
     ros::Publisher kp_pub;              // Keypoint publisher
     ros::Publisher filt_pub;            // Filtered point cloud publisher
-    ros::Publisher norm_pub;           
-    ros::Publisher norm2d_pub;           
 
     // --- Subscribers
     ros::Subscriber pc_sub;             // Point cloud subscriber
@@ -90,18 +85,19 @@ class FeatureExtractionNode
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
     double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
     // Normal estimation
-    double normRadius;                       // number of neighbors used to estimate surface normal
+    double normRadius;                  // neighbors within this radius of keypoint used to estimate surface normal
     // Detector
-    int kpNumThreads;                   // number of threads in calculating harris keypoints
-    bool kpRefine;                      // keypoint refine boolean
-    bool kpNonMaxSupression;            // keypoint detection non max supression boolean
-    double kpThreshold;                 // keypoint detection threshold for non max supression 
-    double kpRadius;                    // radius (in meters) for gathering neighbors
+    double clusterTolerance;            // Tolerance for point cloud segmentation (as a measure in L2 Euclidean space)
+    int clusterMinCount;                 // Minimum number of points in a cluster
+    int clusterMaxCount;                // Maximum number of points in a cluster
     
-    bool init;
+    double clusterRadiusThreshold;      
+
     // Descriptor
-
-
+    double descriptorRadius;
+    // Other
+    bool init;
+    
 };
 
 #endif

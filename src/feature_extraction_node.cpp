@@ -24,16 +24,15 @@ FeatureExtractionNode::FeatureExtractionNode()
   ///////////////////////////////////
   /* Keypoint Detection Parameters */
   ///////////////////////////////////
-  nh.param("harris_number_of_threads", kpNumThreads, 0);
-  nh.param("harris_refine", kpRefine, false);
-  nh.param("harris_non_max_supression", kpNonMaxSupression, true);
-  nh.param("harris_radius", kpRadius, 1.0);
-  nh.param("harris_threshold", kpThreshold, 0.1);
+  nh.param("cluster_tolerance", clusterTolerance, 1.2);
+  nh.param("cluster_min_count", clusterMinCount, 5);
+  nh.param("cluster_max_count", clusterMaxCount, 50);
+  nh.param("cluster_radius_threshold", descriptorRadius, 2.5);
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
   ///////////////////////////////////
-
+  nh.param("descriptor_radius", clusterRadiusThreshold, 0.5);
 
   ////////////////////////////////
   /* ROS Publishers/Subscribers */
@@ -41,12 +40,10 @@ FeatureExtractionNode::FeatureExtractionNode()
   pc_sub = nh.subscribe ("/velodyne_points", 0, &FeatureExtractionNode::cloudCallback, this);
   imu_sub = nh.subscribe ("/xsens/data", 0, &FeatureExtractionNode::imuCallback, this);
 
-  feature_pub = nh.advertise< DescriptorCloud > ("features", 0);
+  feature_pub = nh.advertise<DescriptorCloud> ("features", 0);
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
-  filt_pub = nh.advertise<PointCloud> ("cloud_filt", 0);
-  norm_pub = nh.advertise<PointNormalCloud> ("normals", 0);
-  norm2d_pub = nh.advertise<PointNormalCloud> ("normals2d", 0);
-
+  filt_pub = nh.advertise<PointCloud> ("cloud", 0);
+  
 }
 
 FeatureExtractionNode::~FeatureExtractionNode()
@@ -66,67 +63,42 @@ void FeatureExtractionNode::imuCallback (const sensor_msgs::ImuConstPtr& msg)
 
 void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPtr& msg)
 {
-
   ////////////////////////////
   /* Point Cloud Conversion */
   ////////////////////////////
-  PointCloud::Ptr cloud(new PointCloud);
+  PointCloud::Ptr cloud_full(new PointCloud);
 
   pcl::PCLPointCloud2 cloud2;
   pcl_conversions::toPCL(*msg,cloud2); // sensor_msgs::PointCloud2 to pcl::PCLPointCloud2
-  pcl::fromPCLPointCloud2(cloud2,*cloud); // pcl::PCLPointCloud2 to PointCloud
+  pcl::fromPCLPointCloud2(cloud2,*cloud_full); // pcl::PCLPointCloud2 to PointCloud
 
   pcl::StopWatch watch;
   ////////////////////////
   /* Rotate Point Cloud */
   ////////////////////////
-  rotateCloud(cloud);
+  rotateCloud(cloud_full);
 
-  if (!init){
-    init=true;
-    pcl::io::savePCDFileASCII("output.pcd", *cloud);
-  }
+  // if (!init){
+  //   init=true;
+  //   pcl::io::savePCDFileASCII("output.pcd", *cloud);
+  // }
 
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
+  PointCloud::Ptr cloud(new PointCloud);
+  *cloud = *cloud_full;
   filterCloud(cloud);
 
   cloud->header.frame_id = msg->header.frame_id;
   filt_pub.publish (cloud);
-
-  /////////////////////////////
-  /* Point Normal Estimation */
-  /////////////////////////////
-  NormalCloud::Ptr normals(new NormalCloud);
-
-  estimateNormals(cloud,normals);
-
-  PointNormalCloud::Ptr pt_normals(new PointNormalCloud);
-
-  pcl::concatenateFields(*cloud, *normals, *pt_normals);
-
-  pt_normals->header.frame_id = msg->header.frame_id;
-  norm_pub.publish (pt_normals);
-  
-  ////////////////////
-  /* 2D Point Cloud */
-  ////////////////////
-  PointCloud::Ptr cloud2d(new PointCloud);
-  NormalCloud::Ptr normals2d(new NormalCloud);
-  PointNormalCloud::Ptr pt_normals2d(new PointNormalCloud);
-
-  handle2d(cloud,normals,cloud2d,normals2d,pt_normals2d);
-
-  pt_normals2d->header.frame_id = msg->header.frame_id;
-  norm2d_pub.publish (pt_normals2d);
   
   ////////////////////////
   /* Keypoint detection */
   ////////////////////////
   PointCloud::Ptr keypoints(new PointCloud());
 
-  estimateKeypoints(cloud,normals,keypoints);
+  estimateKeypoints(cloud,keypoints);
 
   keypoints->header.frame_id = msg->header.frame_id;
   kp_pub.publish (keypoints);
@@ -136,7 +108,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   /////////////////////
   DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
-  estimateDescriptors(cloud,normals,keypoints,descriptors);
+  estimateDescriptors(cloud,keypoints,descriptors);
   
   descriptors->header.frame_id = msg->header.frame_id;
   feature_pub.publish(descriptors);
@@ -201,105 +173,86 @@ void FeatureExtractionNode::estimateNormals (const PointCloud::Ptr cloud,NormalC
   normalEstimation.compute(*normals);
 }
 
-void FeatureExtractionNode::handle2d (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr cloud2d, NormalCloud::Ptr normals2d, PointNormalCloud::Ptr pt_normals2d)
+void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
 {
-  PointCloud::Ptr cloud2d_lo(new PointCloud);
-  PointCloud::Ptr cloud2d_hi(new PointCloud);
-  PointCloud::Ptr cloud2d_full(new PointCloud);
-  NormalCloud::Ptr normals2d_full(new NormalCloud);
+  std::vector<pcl::PointIndices> clusters;
 
-  *cloud2d = *cloud; // set all fields equal to 3D cloud
-  *cloud2d_lo = *cloud; // same for clone copy
-  *cloud2d_hi = *cloud; // same for clone copy
-
-  float zNom = (zMin+zMax)/2.0;
-  float zLo = zNom - normRadius/2.0;
-  float zHi = zNom + normRadius/2.0;
-  
-  for(size_t i = 0; i<cloud->points.size(); ++i){
-    cloud2d->points[i].z = zNom;
-    cloud2d_lo->points[i].z = zLo;
-    cloud2d_hi->points[i].z = zHi;
-  }
-
-  *cloud2d_full = *cloud2d + *cloud2d_lo;
-
-  *cloud2d_full = *cloud2d_full + *cloud2d_hi;
-
-  estimateNormals(cloud2d_full,normals2d_full);
-
-  for(size_t i = 0; i<cloud2d->points.size(); ++i){normals2d->points.push_back(normals2d_full->points[i]);}
-
-  pcl::concatenateFields(*cloud2d, *normals2d, *pt_normals2d);
-}
-
-void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints)
-{
+  // kd-tree object for searches.
   pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-  pcl::HarrisKeypoint3D <Point, Point> detector;
+  kdtree->setInputCloud(cloud);
+
+  // Euclidean clustering object.
+  pcl::EuclideanClusterExtraction<Point> clustering;
+
+  // Set cluster tolerance to 2cm (small values may cause objects to be divided
+  // in several clusters, whereas big values may join objects in a same cluster).
+  clustering.setClusterTolerance(clusterTolerance);
+  // Set the minimum and maximum number of points that a cluster can have.
+  clustering.setMinClusterSize(clusterMinCount);
+  clustering.setMaxClusterSize(clusterMaxCount);
+  clustering.setSearchMethod(kdtree);
+  clustering.setInputCloud(cloud);
+
+  clustering.extract(clusters);
+
+  if (clusters.size()<=0)
+    return;
+
+  Point pt_centroid;
+
+  double centerDist,maxCenterDist;
+  maxCenterDist = 0.0;
+
+  for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
+  {
+    // ...add all its points to a new cloud...
+    PointCloud::Ptr cluster(new PointCloud);
+
+    for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
+      cluster->points.push_back(cloud->points[*point]);
+    
+    cluster->width = cluster->points.size();
+    cluster->height = 1;
+    cluster->is_dense = true;
+
+    if (cluster->points.size() > 0){
+    
+      // Object to store the centroid coordinates.
+      Eigen::Vector4f centroid;
+      pcl::compute3DCentroid(*cluster, centroid);
+
+      for (int ii = 0; ii<cluster->points.size(); ++ii){
+        centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
+        if (centerDist > maxCenterDist)
+          maxCenterDist = centerDist;
+      }
+      if (maxCenterDist < clusterRadiusThreshold){
+        pt_centroid.x = centroid[0];
+        pt_centroid.y = centroid[1];
+        pt_centroid.z = centroid[2];
+        pt_centroid.intensity = centroid[3];
+
+        keypoints->points.push_back(pt_centroid);
+      }
+
+    }
+
+  }
   
-  detector.setSearchMethod(kdtree); // set pointer to the kD tree
-  //detector.setKSearch(nnKeypoint); // number of neighbors to gather (for normal estimation or non max suppression?)
-  detector.setNormals(normals);
-
-  detector.setNumberOfThreads(kpNumThreads);
-  detector.setRefine(kpRefine);
-  detector.setNonMaxSupression(kpNonMaxSupression); 
-  detector.setRadius(kpRadius); 
-
-  detector.setThreshold(kpThreshold); 
-  detector.setInputCloud(cloud);
- 
-  detector.compute (*keypoints);
-
-  // -----
-  // kdtree->setInputCloud(cloud); // do I need this or did detector handle it?
-  
-  // // kdtree->setInputCloud(keypoints); // do I need this or did detector handle it?
-  // // kdtree->setSearchCloud(cloud);
-  
-  // std::vector<int> indices;
-  // std::vector<float> squaredDistances;
-  
-  // // Placeholder for the 3x3 covariance matrix at each surface patch
-  // Eigen::Matrix< float, 3, 3 > covariance_matrix;
-  // // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
-  // Eigen::Vector4f xyz_centroid;
-  
-  // for(size_t i = 0; i<cloud->points.size(); ++i){
-  //   if (kdtree->radiusSearch(cloud->points[i], kpRadius, indices, squaredDistances) > 0)
-  //   {
-  //     PointCloud::Ptr cloud_local(new PointCloud);
-
-  //     // computePointNormal (*cloud, indices, Eigen::Vector4f &plane_parameters, float &curvature);
-  //     for(size_t j = 0; j<indices.size(); ++j)
-  //       cloud_local->points.push_back(cloud->points[j]);
-
-  //     // Estimate the XYZ centroid
-  //     pcl::compute3DCentroid (*cloud_local, xyz_centroid);
-  //     // Compute the 3x3 covariance matrix
-  //     pcl::computeCovarianceMatrix (*cloud_local, xyz_centroid, covariance_matrix);
-      
-  //   }
-  // }
-
 }
 
-void FeatureExtractionNode::estimateOtherKeypoints (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, PointCloud::Ptr keypoints)
+void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
 {
+  NormalCloud::Ptr normals(new NormalCloud);
 
-}
+  estimateNormals(cloud,normals);
 
-void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const NormalCloud::Ptr normals, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
-{
   pcl::SHOTEstimation<Point, Normal, Descriptor> shot;
-
-  // pcl::SHOTEstimation<Point, pcl::PointXYZINormal, Descriptor> shot2;
 
   shot.setInputCloud(keypoints);
   shot.setSearchSurface(cloud);
   shot.setInputNormals(normals);
-  shot.setRadiusSearch(0.5);
+  shot.setRadiusSearch(descriptorRadius);
 
   //shot.setKSearch(50);
   

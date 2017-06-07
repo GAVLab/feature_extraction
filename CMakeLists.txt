@@ -32,6 +32,9 @@ add_library(feature_extraction
 # add_executable(sift_node src/sift_node.cpp)
 # target_link_libraries(sift_node ${catkin_LIBRARIES})
 
+add_executable(pcl_test src/pcl_test.cpp)
+target_link_libraries(pcl_test ${catkin_LIBRARIES})
+
 add_executable(segmentation_node src/segmentation_node.cpp)
 target_link_libraries(segmentation_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} libvtkCommon.so libvtkFiltering.so)
 
