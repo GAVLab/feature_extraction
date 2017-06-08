@@ -32,6 +32,8 @@
 // #include <pcl/io/pcd_io.h>
 #include <pcl/common/time.h>
 
+#include <pcl/features/3dsc.h>
+
 
 /*! /brief Primary class for the feature extraction node class
 *
@@ -50,12 +52,9 @@ class FeatureExtractionNode
     typedef pcl::PointXYZINormal PointNormal;
     typedef pcl::PointCloud<PointNormal> PointNormalCloud;
 
-    typedef pcl::SHOT352 Descriptor;
+    typedef pcl::ShapeContext1980 Descriptor;
     typedef pcl::PointCloud<Descriptor> DescriptorCloud;
 
-    typedef pcl::Histogram<153> SpinImage;
-    typedef pcl::PointCloud<SpinImage> SpinImageCloud;
-    
     FeatureExtractionNode();
     ~FeatureExtractionNode();
 

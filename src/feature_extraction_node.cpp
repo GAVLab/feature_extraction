@@ -248,6 +248,26 @@ void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, co
   NormalCloud::Ptr normals(new NormalCloud);
   pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
 
+  Normal axis;
+  axis.normal_x = 0.0f; axis.normal_y = 0.0f; axis.normal_z = 1.0f;
+  for (int i = 0; i<cloud->points.size(); ++i)
+    normals->points.push_back(axis);
+
+  // 3DSC estimation object.
+  pcl::ShapeContext3DEstimation<Point, Normal, Descriptor> sc3d;
+  sc3d.setInputCloud(keypoints);
+  sc3d.setSearchSurface(cloud);
+
+  sc3d.setInputNormals(normals);
+  sc3d.setSearchMethod(kdtree);
+
+  sc3d.setRadiusSearch(descriptorRadius);
+  sc3d.setMinimalRadius(descriptorRadius/10.0);
+  sc3d.setPointDensityRadius(descriptorRadius/5.0);
+  sc3d.compute(*descriptors);
+
+
+  /*
   // Setup spin image computation
   pcl::SpinImageEstimation<Point, Normal, SpinImage > si;//(8, 0.5, 16); // (image_width,support_angle_cos,min_pts_neighb)
   si.setInputCloud (keypoints);
@@ -280,7 +300,7 @@ void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, co
       descriptor.descriptor[ii] = spin_images->points[i].histogram[ii];
     descriptors->points.push_back(descriptor);
   }
-
+  */
 }
 
 void FeatureExtractionNode::printRosParameters (void)
