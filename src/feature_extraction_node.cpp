@@ -91,6 +91,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   filterCloud(cloud);
 
   cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
   filt_pub.publish (cloud);
   
   ////////////////////////
@@ -101,6 +102,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   estimateKeypoints(cloud,keypoints);
 
   keypoints->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
   kp_pub.publish (keypoints);
 
   /////////////////////
@@ -110,6 +112,8 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
 
   estimateDescriptors(cloud,keypoints,descriptors);
 
+  descriptors->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, descriptors->header.stamp);
   feature_pub.publish(descriptors);
 
   //pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
