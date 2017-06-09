@@ -3,6 +3,7 @@
 // STL
 #include <iostream>
 // PCL
+#define PCL_NO_PRECOMPILE
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
@@ -18,147 +19,70 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/spin_image.h>
 
-bool enforceIntensitySimilarity (const pcl::PointXYZI& point_a, const pcl::PointXYZI& point_b, float squared_distance)
+namespace pcl
 {
-  if (fabs (point_a.intensity - point_b.intensity) < 0.1f)
-    return (true);
-  else
-    return (false);
+
+struct PointDescriptor
+{
+  PCL_ADD_POINT4D;                  // preferred way of adding a XYZ+padding
+  float intensity;
+  float descriptor[1980];
+  float rf[9];
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // make sure our new allocators are aligned
+} EIGEN_ALIGN16;                    // enforce SSE padding for correct memory alignment
+
 }
+
+POINT_CLOUD_REGISTER_POINT_STRUCT (PointDescriptor,           // here we assume a XYZ + "test" (as fields)
+                                   (float, x, x)
+                                   (float, y, y)
+                                   (float, z, z)
+                                   (float, intensity, intensity)
+                                   (float[1980], descriptor, shape_context)
+                                   (float[9], rf, rf)
+)
 
 class PclTest
 {
 
-    typedef pcl::PointXYZI Point;
-    typedef pcl::PointCloud<Point> PointCloud;
-    
-    typedef pcl::Normal Normal;
-    typedef pcl::PointCloud<Normal> NormalCloud;
+  typedef pcl::PointXYZI Point;
+  typedef pcl::PointCloud<Point> PointCloud;
 
-    typedef pcl::Histogram<153> Descriptor;
-    typedef pcl::PointCloud<Descriptor> DescriptorCloud;
+  typedef pcl::Normal Normal;
+  typedef pcl::PointCloud<Normal> NormalCloud;
+
+  typedef pcl::PointXYZINormal PointNormal;
+  typedef pcl::PointCloud<PointNormal> PointNormalCloud;
+
+  typedef pcl::ShapeContext1980 Descriptor;
+  typedef pcl::PointCloud<Descriptor> DescriptorCloud;
+
+  typedef pcl::PointDescriptor PointDescriptor;
+  typedef pcl::PointCloud<PointDescriptor> PointDescriptorCloud;
 
   public:
 
     PclTest(char** argv);
     ~PclTest();
 
-    // bool enforceIntensitySimilarity (const Point& point_a, const Point& point_b, float squared_distance);
-
   private:
     
-    std::string pcdPath;
-
-    void segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters);
-
-
-    void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
-
-
-
 };
 
 PclTest::PclTest(char** argv)
 {
   ros::NodeHandle nh("~");
   
-  pcdPath = argv[1];
+  DescriptorCloud::Ptr descriptors(new DescriptorCloud());
+  PointCloud::Ptr keypoints(new PointCloud());
+  PointDescriptorCloud::Ptr pt_descriptors(new PointDescriptorCloud());
 
-  PointCloud::Ptr cloud(new PointCloud);
-
-  //////////////////////
-  /* Load Point Cloud */
-  //////////////////////
-  pcl::io::loadPCDFile<Point>(pcdPath, *cloud);
+  pcl::concatenateFields(*keypoints, *descriptors, *pt_descriptors);
   
-  ///////////////////
-  /* Segment Cloud */
-  ///////////////////
-  std::vector<pcl::PointIndices> clusters;
-
-  segmentCloud(cloud,clusters);
-
-}
-
-void PclTest::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
-{
-
-  NormalCloud::Ptr normals(new NormalCloud);
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-
-  // Setup spin image computation
-  pcl::SpinImageEstimation<Point, pcl::Normal, Descriptor > spin_image_descriptor(8, 0.5, 16);
-  spin_image_descriptor.setInputCloud (cloud);
-  spin_image_descriptor.setInputNormals (normals);
-
-  // Use the same KdTree from the normal estimation
-  spin_image_descriptor.setSearchMethod (kdtree);
-  DescriptorCloud::Ptr spin_images (new DescriptorCloud);
-  spin_image_descriptor.setRadiusSearch (0.2);
-
-  // Actually compute the spin images
-  spin_image_descriptor.compute (*spin_images);
-  std::cout << "SI output points.size (): " << spin_images->points.size () << std::endl;
-
-  // Display and retrieve the spin image descriptor vector for the first point.
-  Descriptor first_descriptor = spin_images->points[0];
-  std::cout << first_descriptor << std::endl;
 }
 
 PclTest::~PclTest(){}
 
-void PclTest::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters)
-{
-
-  pcl::ConditionalEuclideanClustering<Point> cec (true);
-  cec.setInputCloud (cloud);
-  
-  // bool (*fptr) (const Point& point_a, const Point& point_b, float squared_distance) = &PclTest::enforceIntensitySimilarity;
-
-  cec.setConditionFunction (&enforceIntensitySimilarity);
-  /*
-  // Points within this distance from one another are going to need to validate the enforceIntensitySimilarity function to be part of the same cluster:
-  cec.setClusterTolerance (clusterTolerance);
-  // Size constraints for the clusters:
-  cec.setMinClusterSize (clusterMinCount);
-  cec.setMaxClusterSize (clusterMaxCount);
-  // The resulting clusters (an array of pointindices):
-  cec.segment (*clusters);
-  // The clusters that are too small or too large in size can also be extracted separately:
-  // cec.getRemovedClusters (small_clusters, large_clusters);
-  */
-
-  /*
-  // kd-tree object for searches.
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-  kdtree->setInputCloud(cloud);
-
-  // Euclidean clustering object.
-  pcl::EuclideanClusterExtraction<Point> clustering;
-
-  // Set cluster tolerance to 2cm (small values may cause objects to be divided
-  // in several clusters, whereas big values may join objects in a same cluster).
-  clustering.setClusterTolerance(1.2f);
-  // Set the minimum and maximum number of points that a cluster can have.
-  clustering.setMinClusterSize(5);
-  clustering.setMaxClusterSize(50);
-  clustering.setSearchMethod(kdtree);
-  clustering.setInputCloud(cloud);
-
-  clustering.extract(clusters);
-
-  int numClusters = clusters.size();
-  std::cout << numClusters << std::endl;
-  */
-}
-
-// bool PclTest::enforceIntensitySimilarity (const Point& point_a, const Point& point_b, float squared_distance)
-// {
-//   if (fabs (point_a.intensity - point_b.intensity) < 0.1f)
-//     return (true);
-//   else
-//     return (false);
-// }
 
 int main (int argc, char** argv)
 {

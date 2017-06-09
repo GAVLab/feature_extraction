@@ -16,6 +16,7 @@
 // STL
 #include <iostream>
 // PCL
+#define PCL_NO_PRECOMPILE
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
@@ -34,6 +35,28 @@
 
 #include <pcl/features/3dsc.h>
 
+namespace pcl
+{
+
+struct PointDescriptor
+{
+  PCL_ADD_POINT4D;                  // preferred way of adding a XYZ+padding
+  float intensity;
+  float descriptor[1980];
+  float rf[9];
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // make sure our new allocators are aligned
+} EIGEN_ALIGN16;                    // enforce SSE padding for correct memory alignment
+
+}
+
+POINT_CLOUD_REGISTER_POINT_STRUCT (PointDescriptor,           // here we assume a XYZ + "test" (as fields)
+                                   (float, x, x)
+                                   (float, y, y)
+                                   (float, z, z)
+                                   (float, intensity, intensity)
+                                   (float[1980], descriptor, shape_context)
+                                   (float[9], rf, rf)
+)
 
 /*! /brief Primary class for the feature extraction node class
 *
@@ -54,6 +77,9 @@ class FeatureExtractionNode
 
     typedef pcl::ShapeContext1980 Descriptor;
     typedef pcl::PointCloud<Descriptor> DescriptorCloud;
+
+    typedef pcl::PointDescriptor PointDescriptor;
+    typedef pcl::PointCloud<PointDescriptor> PointDescriptorCloud;
 
     FeatureExtractionNode();
     ~FeatureExtractionNode();

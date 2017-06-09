@@ -40,7 +40,8 @@ FeatureExtractionNode::FeatureExtractionNode()
   pc_sub = nh.subscribe ("/velodyne_points", 0, &FeatureExtractionNode::cloudCallback, this);
   imu_sub = nh.subscribe ("/xsens/data", 0, &FeatureExtractionNode::imuCallback, this);
 
-  feature_pub = nh.advertise<DescriptorCloud> ("features", 0);
+  feature_pub = nh.advertise<PointDescriptorCloud> ("features", 0);
+  // feature_pub = nh.advertise<DescriptorCloud> ("features", 0);
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
   filt_pub = nh.advertise<PointCloud> ("cloud", 0);
   
@@ -112,10 +113,15 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
 
   estimateDescriptors(cloud,keypoints,descriptors);
 
-  descriptors->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, descriptors->header.stamp);
-  feature_pub.publish(descriptors);
+  PointDescriptorCloud::Ptr pt_descriptors(new PointDescriptorCloud());
 
+  pcl::concatenateFields(*keypoints, *descriptors, *pt_descriptors);
+
+  pt_descriptors->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
+  feature_pub.publish(pt_descriptors);
+
+  
   //pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
 }
