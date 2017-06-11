@@ -1,11 +1,11 @@
 <launch>
 
-  <node pkg="feature_extraction" type="pcl_tune" name="pcl_tune" output="screen" args="/home/danpierce/devel/lidar_ws/data/output_full.pcd" >
+  <node pkg="feature_extraction" type="pcl_tune" name="pcl_tune" output="screen" args="/media/psf/Home/Desktop/output.pcd" >
 
 
     <param name="cluster_tolerance" value="1.2"/>
     <param name="cluster_min_count" value="5"/>
-    <param name="cluster_max_count" value="50"/>
+    <param name="cluster_max_count" value="25"/>
 
 
     <param name="x_max" value="50.0"/>
@@ -19,8 +19,8 @@
     <!-- <param name="z_max" value="0.87"/> -->
     <!-- <param name="z_min" value="-0.87"/> -->
     
-    <param name="z_max" value="1.87"/>
-    <param name="z_min" value="0.13"/>
+    <param name="z_max" value="1.0"/>
+    <param name="z_min" value="-1.0"/>
   </node>
 
 </launch>

@@ -29,12 +29,12 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("cluster_tolerance", clusterTolerance, 1.2);
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
-  nh.param("cluster_radius_threshold", descriptorRadius, 2.5);
+  nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.5);
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
   ///////////////////////////////////
-  nh.param("descriptor_radius", clusterRadiusThreshold, 0.5);
+  nh.param("descriptor_radius", descriptorRadius, 2.5);
 
   ////////////////////////////////
   /* ROS Publishers/Subscribers */
