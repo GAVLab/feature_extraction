@@ -13,6 +13,9 @@
 
     <param name="normal_radius" value="0.4"/>
 
+
+    <param name="cloud_leveling" value="true"/>
+
   	<param name="cluster_tolerance" value="1.2"/>
     <param name="cluster_min_count" value="5"/>
     <param name="cluster_max_count" value="50"/>

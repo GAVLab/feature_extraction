@@ -114,6 +114,7 @@ class FeatureExtractionNode
     // Pass through filter
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
     double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
+    bool levelCloud;
     // Normal estimation
     double normRadius;                  // neighbors within this radius of keypoint used to estimate surface normal
     // Detector

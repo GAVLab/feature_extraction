@@ -6,6 +6,8 @@ FeatureExtractionNode::FeatureExtractionNode()
 
   ros::NodeHandle nh("~");
 
+  nh.param("cloud_leveling", levelCloud, true);
+
   /////////////////////////////
   /* Cloud Filter Parameters */
   /////////////////////////////
@@ -54,12 +56,17 @@ FeatureExtractionNode::~FeatureExtractionNode()
 
 void FeatureExtractionNode::imuCallback (const sensor_msgs::ImuConstPtr& msg)
 {
-  tf::Quaternion quat;
-  double yaw,tmproll;
-  
-  tf::quaternionMsgToTF(msg->orientation, quat);
-  tf::Matrix3x3(quat).getRPY(tmproll, pitch, yaw);
-  roll = tmproll - M_PI;
+  if (levelCloud){
+    tf::Quaternion quat;
+    double yaw,tmproll;
+    
+    tf::quaternionMsgToTF(msg->orientation, quat);
+    tf::Matrix3x3(quat).getRPY(tmproll, pitch, yaw);
+    roll = tmproll - M_PI;
+  }else{
+    roll = 0.0;
+    pitch = 0.0;
+  }
 }
 
 void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPtr& msg)
