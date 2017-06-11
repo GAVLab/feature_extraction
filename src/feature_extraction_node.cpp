@@ -217,7 +217,6 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   Point pt_centroid;
 
   double centerDist,maxCenterDist;
-  maxCenterDist = 0.0;
 
   for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
   {
@@ -236,6 +235,7 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
       // Object to store the centroid coordinates.
       Eigen::Vector4f centroid;
       pcl::compute3DCentroid(*cluster, centroid);
+      maxCenterDist = 0.0;
 
       for (int ii = 0; ii<cluster->points.size(); ++ii){
         centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);

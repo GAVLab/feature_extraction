@@ -38,9 +38,12 @@ class PclTune
 
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
 
+    bool init;
+
     // Detector
     double clusterTolerance;
     int clusterMinCount,clusterMaxCount;
+    double clusterRadiusThreshold;
 
     std::string pcdPath;
 
@@ -60,6 +63,8 @@ PclTune::PclTune(char** argv)
 {
   ros::NodeHandle nh("~");
 
+  init = false;
+
   /////////////////////////////
   /* Cloud Filter Parameters */
   /////////////////////////////
@@ -76,10 +81,11 @@ PclTune::PclTune(char** argv)
   nh.param("cluster_tolerance", clusterTolerance, 1.2);
   nh.param("cluster_min_count", clusterMinCount, 10);
   nh.param("cluster_max_count", clusterMaxCount, 250);
+  nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
 
   prmIdx = 1;
 
-  maxNumClusters = 20;
+  maxNumClusters = 100;
   
   pcdPath = argv[1];
   
@@ -98,14 +104,11 @@ PclTune::~PclTune(){}
 
 void PclTune::processCloud (PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters, PointCloud::Ptr keypoints){
 
-  PointCloud::Ptr cloud_full(new PointCloud);
-
   //////////////////////
   /* Load Point Cloud */
   //////////////////////
-  pcl::io::loadPCDFile<Point>(pcdPath, *cloud_full);
+  pcl::io::loadPCDFile<Point>(pcdPath, *cloud);
 
-  *cloud = *cloud_full;
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
@@ -122,22 +125,30 @@ boost::shared_ptr<pcl::visualization::PCLVisualizer> PclTune::createViewer ()
   
   viewer->registerKeyboardCallback(&PclTune::keyboardCallback, *this, viewer.get());
 
+  //////////////////////
+  /* Load Point Cloud */
+  //////////////////////
   PointCloud::Ptr cloud(new PointCloud);
-  PointCloud::Ptr keypoints(new PointCloud);
-  std::vector<pcl::PointIndices> clusters;
+  pcl::io::loadPCDFile<Point>(pcdPath, *cloud);
 
-  processCloud(cloud,clusters,keypoints);
-
-
-  
-  viewer->addPointCloud<Point>(cloud, "cloud");
-  
+  // initialize cluster visualizations
   std::stringstream ss;
   for (int i=0;i<maxNumClusters;++i){
     ss << "cluster" << i;
     viewer->addPointCloud<Point>(cloud, ss.str() );
     ss.str("");
   }
+
+  // initialize filtered cloud viz
+  viewer->addPointCloud<Point>(cloud, "cloud" );
+
+  // visualize full cloud  
+  pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cloud, 128, 128, 128);
+
+  viewer->addPointCloud<Point>(cloud,single_color, "cloud_full" );
+  viewer->setPointCloudRenderingProperties
+  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud_full");
+
     
   return (viewer);
 }
@@ -150,7 +161,10 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
 
   double prm_step[] = {0.05, // clusterTolerance
                        1, // clusterMinCount
-                       1}; // clusterMaxCount
+                       1, // clusterMaxCount
+                       0.05, // clusterRadiusThreshold
+                       0.05, // zMin
+                       0.05}; // zMax
                        
   int nPrm = (int) sizeof(prm_step)/sizeof(prm_step[0]);
 
@@ -189,8 +203,21 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
         clusterMaxCount += prm_step[prmIdx]*( (double) adjDir );
         std::cout << std::endl << "clusterMaxCount = " << clusterMaxCount << std::endl << std::endl;
         break;
+      case 3:
+        clusterRadiusThreshold += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "clusterRadiusThreshold = " << clusterRadiusThreshold << std::endl << std::endl;
+        break;
+      case 4:
+        zMin += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "zMin = " << zMin << std::endl << std::endl;
+        break;
+      case 5:
+        zMax += prm_step[prmIdx]*( (double) adjDir );
+        std::cout << std::endl << "zMax = " << zMax << std::endl << std::endl;
+        break;
 
     }
+
 
 
     std::stringstream ss;
@@ -201,7 +228,7 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
     }
 
 
-
+    
 
 
     
@@ -211,13 +238,17 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
 
     processCloud(cloud,clusters,keypoints);
 
+    if ((prmIdx==4) || (prmIdx==5) || !init){
+      viewer->removePointCloud("cloud",0);
+      viewer->addPointCloud<Point>(cloud, "cloud" );
+      viewer->setPointCloudRenderingProperties
+      (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud");
+      init = true;
+    }
+    if (clusters.size()<=0)
+        return;
+
     int numClusters = clusters.size();
-  
-    // std::cout << << numClusters << std::endl;
-
-    if (numClusters<=0)
-      return;
-
     std::vector<int> red (numClusters);
     std::vector<int> blue (numClusters);
     std::vector<int> green (numClusters);
@@ -228,10 +259,10 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
       red[i] = (i+1)*step;
       green[i] = (i%2)*255;
       blue[i] = (numClusters-i)*step;
-      std::cout << "green[i] = " << green[i] << std::endl;
-      
     }
-    
+
+    double centerDist,maxCenterDist;
+
     // For every cluster.
     int clusterId = 0;
     for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
@@ -246,21 +277,34 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
       cluster->height = 1;
       cluster->is_dense = true;
 
-      if (cluster->points.size() <= 0)
-        break;
-      std::cout << "Cluster " << clusterId << " has " << cluster->points.size() << " points." << std::endl;
-      
+      if (cluster->points.size() > 0){
+        // Object to store the centroid coordinates.
+        Eigen::Vector4f centroid;
+        pcl::compute3DCentroid(*cluster, centroid);
 
-      //
-      ss << "cluster" << clusterId;
-      
-      pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cluster, red[clusterId], green[clusterId], blue[clusterId]);
+        maxCenterDist = 0.0;
 
-      viewer->addPointCloud<Point>(cluster,single_color, ss.str() );
-      viewer->setPointCloudRenderingProperties
-      (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, ss.str());
+        for (int ii = 0; ii<cluster->points.size(); ++ii){
+          centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
+          if (centerDist > maxCenterDist)
+            maxCenterDist = centerDist;
+        }
+        if (maxCenterDist < clusterRadiusThreshold){
 
-      ss.str("");
+          std::cout << "Cluster " << clusterId << " has " << cluster->points.size() << " points." << std::endl;
+          
+          //
+          ss << "cluster" << clusterId;
+          
+          pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cluster, red[clusterId], green[clusterId], blue[clusterId]);
+
+          viewer->addPointCloud<Point>(cluster,single_color, ss.str() );
+          viewer->setPointCloudRenderingProperties
+          (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, ss.str());
+
+          ss.str("");
+        }
+      }
 
       clusterId++;
     }
@@ -272,9 +316,16 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
 void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters)
 {
 
+  PointCloud::Ptr cloud2d(new PointCloud);
+  
+  *cloud2d = *cloud;
+  for (int ii = 0; ii<cloud->points.size(); ++ii)
+    cloud2d->points[ii].z = 0.0;
+      
+
   // kd-tree object for searches.
   pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-  kdtree->setInputCloud(cloud);
+  kdtree->setInputCloud(cloud2d);
 
   // Euclidean clustering object.
   pcl::EuclideanClusterExtraction<Point> clustering;
@@ -286,13 +337,11 @@ void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointI
   clustering.setMinClusterSize(clusterMinCount);
   clustering.setMaxClusterSize(clusterMaxCount);
   clustering.setSearchMethod(kdtree);
-  clustering.setInputCloud(cloud);
+  clustering.setInputCloud(cloud2d);
 
   clustering.extract(clusters);
 
-  int numClusters = clusters.size();
-  std::cout << numClusters << std::endl;
-
+  
 
 }
 

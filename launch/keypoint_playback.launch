@@ -11,8 +11,6 @@
 
   <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
 
-    <param name="normal_radius" value="0.4"/>
-
 
     <param name="cloud_leveling" value="true"/>
 
@@ -28,6 +26,8 @@
     
     <param name="z_max" value="2.5"/>
     <param name="z_min" value="0.13"/>
+
+    <param name="descriptor_radius" value="2.5"/>
 
   </node>
 
