@@ -92,11 +92,11 @@ class FeatureExtractionNode
 
     void rotateCloud (PointCloud::Ptr cloud);
 
-    void estimateNormals (const PointCloud::Ptr cloud, NormalCloud::Ptr normals);
-
     void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
     void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
+
+    void applyClusterRadiusThreshold(std::vector<pcl::PointIndices>& clusterIndices);
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
@@ -115,8 +115,6 @@ class FeatureExtractionNode
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
     double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
     bool levelCloud;
-    // Normal estimation
-    double normRadius;                  // neighbors within this radius of keypoint used to estimate surface normal
     // Detector
     double clusterTolerance;            // Tolerance for point cloud segmentation (as a measure in L2 Euclidean space)
     int clusterMinCount;                 // Minimum number of points in a cluster

@@ -18,18 +18,13 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("z_min", zMin, -1.15);
   nh.param("z_max", zMax, 5.0);
 
-  //////////////////////////////////
-  /* Normal Estimation Parameters */
-  //////////////////////////////////
-  nh.param("normal_radius", normRadius, 0.25);
-
   ///////////////////////////////////
   /* Keypoint Detection Parameters */
   ///////////////////////////////////
-  nh.param("cluster_tolerance", clusterTolerance, 1.2);
+  nh.param("cluster_tolerance", clusterTolerance, 0.65);
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
-  nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.5);
+  nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
@@ -43,7 +38,6 @@ FeatureExtractionNode::FeatureExtractionNode()
   imu_sub = nh.subscribe ("/xsens/data", 0, &FeatureExtractionNode::imuCallback, this);
 
   feature_pub = nh.advertise<PointDescriptorCloud> ("features", 0);
-  // feature_pub = nh.advertise<DescriptorCloud> ("features", 0);
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
   filt_pub = nh.advertise<PointCloud> ("cloud", 0);
   
@@ -178,27 +172,22 @@ filter.filter(*cloud);
 
 }
 
-void FeatureExtractionNode::estimateNormals (const PointCloud::Ptr cloud,NormalCloud::Ptr normals)
-{
-  pcl::NormalEstimation<Point, Normal> normalEstimation;
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-
-  normalEstimation.setInputCloud(cloud);
-  normalEstimation.setSearchMethod(kdtree);
-  normalEstimation.setRadiusSearch(normRadius);
-  normalEstimation.compute(*normals);
-}
-
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
 {
-  std::vector<pcl::PointIndices> clusters;
+  // --- Project cloud into 2D space
+  PointCloud::Ptr cloud2d(new PointCloud); // 2d projection of point cloud
 
-  // kd-tree object for searches.
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>);
-  kdtree->setInputCloud(cloud);
+  *cloud2d = *cloud; 
+  for (int ii = 0; ii<cloud->points.size(); ++ii)
+    cloud2d->points[ii].z = 0.0;
+  
+  // --- Perform Euclidean clustering (in 2D space)
+  std::vector<pcl::PointIndices> clusterIndices;
 
-  // Euclidean clustering object.
-  pcl::EuclideanClusterExtraction<Point> clustering;
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>); // kd-tree object for searches
+  kdtree->setInputCloud(cloud2d);
+
+  pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
 
   // Set cluster tolerance to 2cm (small values may cause objects to be divided
   // in several clusters, whereas big values may join objects in a same cluster).
@@ -207,18 +196,18 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   clustering.setMinClusterSize(clusterMinCount);
   clustering.setMaxClusterSize(clusterMaxCount);
   clustering.setSearchMethod(kdtree);
-  clustering.setInputCloud(cloud);
+  clustering.setInputCloud(cloud2d);
 
-  clustering.extract(clusters);
+  clustering.extract(clusterIndices);
 
-  if (clusters.size()<=0)
+  if (clusterIndices.size()<=0)
     return;
 
-  Point pt_centroid;
+  // --- Throw away clusters with radius above predefined threshold
+  Point pt_centroid; // stores point of the cluster centroid
+  double centerDist,maxCenterDist; 
 
-  double centerDist,maxCenterDist;
-
-  for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
+  for (std::vector<pcl::PointIndices>::const_iterator i = clusterIndices.begin(); i != clusterIndices.end(); ++i)
   {
     // ...add all its points to a new cloud...
     PointCloud::Ptr cluster(new PointCloud);
@@ -257,6 +246,11 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   
 }
 
+
+void FeatureExtractionNode::applyClusterRadiusThreshold(std::vector<pcl::PointIndices>& clusterIndices){
+  
+}
+
 void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
 {
   if (keypoints->points.size()<=0)
@@ -283,41 +277,6 @@ void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, co
   sc3d.setPointDensityRadius(descriptorRadius/5.0);
   sc3d.compute(*descriptors);
 
-
-  /*
-  // Setup spin image computation
-  pcl::SpinImageEstimation<Point, Normal, SpinImage > si;//(8, 0.5, 16); // (image_width,support_angle_cos,min_pts_neighb)
-  si.setInputCloud (keypoints);
-  si.setSearchSurface (cloud);
-
-  Normal axis;
-  axis.normal_x = 0.0f; axis.normal_y = 0.0f; axis.normal_z = 1.0f;
-
-  si.setRotationAxis(axis);
-
-  for (int i = 0; i<keypoints->points.size(); ++i)
-    normals->points.push_back(axis);
-  si.setInputNormals(normals);
-
-  // Use the same KdTree from the normal estimation
-  si.setSearchMethod (kdtree);
-  SpinImageCloud::Ptr spin_images (new SpinImageCloud);
-  si.setRadiusSearch (descriptorRadius);
-
-  si.setImageWidth(8);
-
-  // Actually compute the spin images
-  si.compute (*spin_images);
-
-  int histLength = 153;
-
-  Descriptor descriptor;
-  for (int i = 0; i<spin_images->points.size(); ++i){
-    for (int ii = 0; ii<histLength; ++ii)
-      descriptor.descriptor[ii] = spin_images->points[i].histogram[ii];
-    descriptors->points.push_back(descriptor);
-  }
-  */
 }
 
 void FeatureExtractionNode::printRosParameters (void)
