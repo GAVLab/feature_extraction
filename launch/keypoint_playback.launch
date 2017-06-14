@@ -1,12 +1,17 @@
 <launch>
 
-  <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
+  <!-- <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/> -->
+  <!-- <arg name="start_time" default="20"/> -->
+  <!-- <arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/> -->
 
-  <arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/>
+
+  <arg name="bagfile" default="ion_gnss_forestry_loop_trimmed.bag"/>
+  <arg name="start_time" default="0"/>
+  <arg name="bagpath" default="/media/psf/Home/Desktop"/>
 
   <!-- bagfile playback -->
   <node name="player" pkg="rosbag" type="play" output="screen"
-    args="-l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
+    args="-s $(arg start_time) -l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
 
 
   <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
@@ -14,18 +19,18 @@
 
     <param name="cloud_leveling" value="true"/>
 
-  	<param name="cluster_tolerance" value="1.2"/>
+  	<param name="cluster_tolerance" value="0.65"/>
     <param name="cluster_min_count" value="5"/>
     <param name="cluster_max_count" value="50"/>
-    <param name="cluster_radius_threshold" value="0.5"/>
+    <param name="cluster_radius_threshold" value="0.15"/>
 
     <param name="x_max" value="50.0"/>
     <param name="x_min" value="0.0"/>
     <param name="y_max" value="25.0"/>
     <param name="y_min" value="-25.0"/>
     
-    <param name="z_max" value="2.5"/>
-    <param name="z_min" value="0.13"/>
+    <param name="z_max" value="1.0"/>
+    <param name="z_min" value="-0.5"/>
 
     <param name="descriptor_radius" value="2.5"/>
 

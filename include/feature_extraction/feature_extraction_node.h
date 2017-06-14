@@ -94,9 +94,9 @@ class FeatureExtractionNode
 
     void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
-    void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
+    bool checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid);
 
-    void applyClusterRadiusThreshold(std::vector<pcl::PointIndices>& clusterIndices);
+    void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
 
     void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
@@ -121,7 +121,7 @@ class FeatureExtractionNode
     int clusterMaxCount;                // Maximum number of points in a cluster
     
     double clusterRadiusThreshold;      
-
+    bool clusterEnforceMinHeight;
     // Descriptor
     double descriptorRadius;
     // Other

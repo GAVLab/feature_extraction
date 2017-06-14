@@ -40,6 +40,8 @@ class PclTune
 
     bool init;
 
+    bool enforceMinHeight;
+
     // Detector
     double clusterTolerance;
     int clusterMinCount,clusterMaxCount;
@@ -56,6 +58,8 @@ class PclTune
     void filterCloud (PointCloud::Ptr cloud);
 
     void segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters);
+
+    bool checkClusterCondition (const PointCloud::Ptr cluster);
 
 };
 
@@ -82,6 +86,8 @@ PclTune::PclTune(char** argv)
   nh.param("cluster_min_count", clusterMinCount, 10);
   nh.param("cluster_max_count", clusterMaxCount, 250);
   nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
+
+  enforceMinHeight = true;
 
   prmIdx = 1;
 
@@ -162,9 +168,10 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
   double prm_step[] = {0.05, // clusterTolerance
                        1, // clusterMinCount
                        1, // clusterMaxCount
-                       0.05, // clusterRadiusThreshold
+                       0.01, // clusterRadiusThreshold
                        0.05, // zMin
-                       0.05}; // zMax
+                       0.05, // zMax
+                       0.0}; // (bool) enforce height TH
                        
   int nPrm = (int) sizeof(prm_step)/sizeof(prm_step[0]);
 
@@ -215,6 +222,11 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
         zMax += prm_step[prmIdx]*( (double) adjDir );
         std::cout << std::endl << "zMax = " << zMax << std::endl << std::endl;
         break;
+      case 6:
+        if (adjDir!=0)
+          enforceMinHeight = !enforceMinHeight;
+        std::cout << std::endl << "enforceMinHeight = " << enforceMinHeight << std::endl << std::endl;
+        break;
 
     }
 
@@ -234,9 +246,9 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
     
     PointCloud::Ptr cloud(new PointCloud);
     PointCloud::Ptr keypoints(new PointCloud);
-    std::vector<pcl::PointIndices> clusters;
+    std::vector<pcl::PointIndices> clusterIndices;
 
-    processCloud(cloud,clusters,keypoints);
+    processCloud(cloud,clusterIndices,keypoints);
 
     if ((prmIdx==4) || (prmIdx==5) || !init){
       viewer->removePointCloud("cloud",0);
@@ -245,10 +257,15 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
       (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud");
       init = true;
     }
-    if (clusters.size()<=0)
+
+    int numClusters = clusterIndices.size();
+
+    std::cout << "Number of clusters: " << numClusters << std::endl;
+
+    if (numClusters<=0)
         return;
 
-    int numClusters = clusters.size();
+    // --- Get colors for each cluster
     std::vector<int> red (numClusters);
     std::vector<int> blue (numClusters);
     std::vector<int> green (numClusters);
@@ -261,60 +278,30 @@ void PclTune::keyboardCallback (const pcl::visualization::KeyboardEvent &event, 
       blue[i] = (numClusters-i)*step;
     }
 
-    double centerDist,maxCenterDist;
-
-    // For every cluster.
-    int clusterId = 0;
-    for (std::vector<pcl::PointIndices>::const_iterator i = clusters.begin(); i != clusters.end(); ++i)
-    {
-      // ...add all its points to a new cloud...
+    // --- Plot clusters
+    for (int i=0;i<numClusters;++i){
       PointCloud::Ptr cluster(new PointCloud);
-
-      for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
-        cluster->points.push_back(cloud->points[*point]);
+      for (int ii=0; ii<clusterIndices[i].indices.size(); ii++)
+        cluster->points.push_back(cloud->points[clusterIndices[i].indices[ii]]);
       
-      cluster->width = cluster->points.size();
-      cluster->height = 1;
-      cluster->is_dense = true;
+      ss << "cluster" << i;
+      pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cluster, red[i], green[i], blue[i]);
 
-      if (cluster->points.size() > 0){
-        // Object to store the centroid coordinates.
-        Eigen::Vector4f centroid;
-        pcl::compute3DCentroid(*cluster, centroid);
+      viewer->addPointCloud<Point>(cluster,single_color, ss.str() );
+      viewer->setPointCloudRenderingProperties
+      (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, ss.str());
 
-        maxCenterDist = 0.0;
-
-        for (int ii = 0; ii<cluster->points.size(); ++ii){
-          centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
-          if (centerDist > maxCenterDist)
-            maxCenterDist = centerDist;
-        }
-        if (maxCenterDist < clusterRadiusThreshold){
-
-          std::cout << "Cluster " << clusterId << " has " << cluster->points.size() << " points." << std::endl;
-          
-          //
-          ss << "cluster" << clusterId;
-          
-          pcl::visualization::PointCloudColorHandlerCustom<Point> single_color(cluster, red[clusterId], green[clusterId], blue[clusterId]);
-
-          viewer->addPointCloud<Point>(cluster,single_color, ss.str() );
-          viewer->setPointCloudRenderingProperties
-          (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, ss.str());
-
-          ss.str("");
-        }
-      }
-
-      clusterId++;
+      ss.str("");
     }
 
   }
 
 }
 
-void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusters)
+void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointIndices>& clusterIndices)
 {
+
+  std::vector<pcl::PointIndices> clusterIndicesFull;
 
   PointCloud::Ptr cloud2d(new PointCloud);
   
@@ -339,11 +326,55 @@ void PclTune::segmentCloud (const PointCloud::Ptr cloud, std::vector<pcl::PointI
   clustering.setSearchMethod(kdtree);
   clustering.setInputCloud(cloud2d);
 
-  clustering.extract(clusters);
+  clustering.extract(clusterIndicesFull);
 
+  // clusterIndices = clusterIndicesFull;
+
+  for (int i=0; i<clusterIndicesFull.size(); i++){
+
+    PointCloud::Ptr cluster(new PointCloud);
+    for (int ii=0; ii<clusterIndicesFull[i].indices.size(); ii++)
+      cluster->points.push_back(cloud->points[clusterIndicesFull[i].indices[ii]]);
+    
+    if(checkClusterCondition(cluster))
+      clusterIndices.push_back(clusterIndicesFull[i]);
   
+  }
 
 }
+
+bool PclTune::checkClusterCondition (const PointCloud::Ptr cluster){
+
+  if (cluster->points.size()<=0)
+    return false;
+
+  double range,heightThreshold;
+  double centerDist,height;
+  double maxCenterDist = 0.0;
+  double maxHeight = 0.0;
+  Eigen::Vector4f centroid;
+  
+  pcl::compute3DCentroid(*cluster, centroid);
+
+  for (int ii = 0; ii<cluster->points.size(); ++ii){
+    centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
+    height = pow(pow(cluster->points[ii].z-centroid[2],2),0.5);
+    if (centerDist > maxCenterDist)
+      maxCenterDist = centerDist;
+    if (height > maxHeight)
+      maxHeight = height;
+  }
+
+  range = pow(pow(centroid[0],2)+pow(centroid[1],2),0.5);
+  if (enforceMinHeight){
+    heightThreshold = 0.5*range*tan(2*M_PI/180.0);
+  }else{
+    heightThreshold = 0.0;
+  }
+
+  return ((maxCenterDist<clusterRadiusThreshold) && (maxHeight>heightThreshold));
+}
+
 
 void PclTune::filterCloud (PointCloud::Ptr cloud){
 

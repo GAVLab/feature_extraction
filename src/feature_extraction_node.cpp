@@ -25,6 +25,9 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
   nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
+  nh.param("cluster_enforce_min_height", clusterEnforceMinHeight, true);
+
+
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
@@ -215,23 +218,9 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
     for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
       cluster->points.push_back(cloud->points[*point]);
     
-    cluster->width = cluster->points.size();
-    cluster->height = 1;
-    cluster->is_dense = true;
-
     if (cluster->points.size() > 0){
-    
-      // Object to store the centroid coordinates.
       Eigen::Vector4f centroid;
-      pcl::compute3DCentroid(*cluster, centroid);
-      maxCenterDist = 0.0;
-
-      for (int ii = 0; ii<cluster->points.size(); ++ii){
-        centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
-        if (centerDist > maxCenterDist)
-          maxCenterDist = centerDist;
-      }
-      if (maxCenterDist < clusterRadiusThreshold){
+      if (checkClusterCondition (cluster,centroid)) {
         pt_centroid.x = centroid[0];
         pt_centroid.y = centroid[1];
         pt_centroid.z = centroid[2];
@@ -246,9 +235,35 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   
 }
 
+bool FeatureExtractionNode::checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid){
 
-void FeatureExtractionNode::applyClusterRadiusThreshold(std::vector<pcl::PointIndices>& clusterIndices){
+  if (cluster->points.size()<=0)
+    return false;
+
+  double range,heightThreshold;
+  double centerDist,height;
+  double maxCenterDist = 0.0;
+  double maxHeight = 0.0;
   
+  pcl::compute3DCentroid(*cluster, centroid);
+
+  for (int ii = 0; ii<cluster->points.size(); ++ii){
+    centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
+    height = pow(pow(cluster->points[ii].z-centroid[2],2),0.5);
+    if (centerDist > maxCenterDist)
+      maxCenterDist = centerDist;
+    if (height > maxHeight)
+      maxHeight = height;
+  }
+
+  range = pow(pow(centroid[0],2)+pow(centroid[1],2),0.5);
+  if (clusterEnforceMinHeight){
+    heightThreshold = 0.5*range*tan(2*M_PI/180.0);
+  }else{
+    heightThreshold = 0.0;
+  }
+
+  return ((maxCenterDist<clusterRadiusThreshold) && (maxHeight>heightThreshold));
 }
 
 void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
