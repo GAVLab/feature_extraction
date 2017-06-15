@@ -20,17 +20,18 @@
     <param name="cloud_leveling" value="true"/>
 
   	<param name="cluster_tolerance" value="0.65"/>
-    <param name="cluster_min_count" value="5"/>
+    <param name="cluster_min_count" value="3"/>
     <param name="cluster_max_count" value="50"/>
-    <param name="cluster_radius_threshold" value="0.15"/>
+    <param name="cluster_radius_threshold" value="0.2"/>
+    <param name="num_detection_channels" value="3"/>
 
     <param name="x_max" value="50.0"/>
     <param name="x_min" value="0.0"/>
     <param name="y_max" value="25.0"/>
     <param name="y_min" value="-25.0"/>
     
-    <param name="z_max" value="1.0"/>
-    <param name="z_min" value="-0.5"/>
+    <param name="z_max" value="2.0"/>
+    <param name="z_min" value="-1.0"/>
 
     <param name="descriptor_radius" value="2.5"/>
 

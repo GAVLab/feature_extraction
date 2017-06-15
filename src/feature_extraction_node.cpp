@@ -12,10 +12,10 @@ FeatureExtractionNode::FeatureExtractionNode()
   /* Cloud Filter Parameters */
   /////////////////////////////
   nh.param("x_min", xMin, 0.0);
-  nh.param("x_max", xMax, 100.0);
-  nh.param("y_min", yMin, -50.0);
-  nh.param("y_max", yMax, 50.0);
-  nh.param("z_min", zMin, -1.15);
+  nh.param("x_max", xMax, 75.0);
+  nh.param("y_min", yMin, -30.0);
+  nh.param("y_max", yMax, 30.0);
+  nh.param("z_min", zMin, -1.5);
   nh.param("z_max", zMax, 5.0);
 
   ///////////////////////////////////
@@ -25,9 +25,10 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
   nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
-  nh.param("cluster_enforce_min_height", clusterEnforceMinHeight, true);
+  nh.param("number_detection_channels", numDetectionChannels, 3);
 
-
+  if (numDetectionChannels<2)
+    numDetectionChannels = 2;
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
@@ -71,36 +72,31 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////////
   /* Point Cloud Conversion */
   ////////////////////////////
-  PointCloud::Ptr cloud_full(new PointCloud);
+  PointCloud::Ptr cloud(new PointCloud);
 
   pcl::PCLPointCloud2 cloud2;
   pcl_conversions::toPCL(*msg,cloud2); // sensor_msgs::PointCloud2 to pcl::PCLPointCloud2
-  pcl::fromPCLPointCloud2(cloud2,*cloud_full); // pcl::PCLPointCloud2 to PointCloud
+  pcl::fromPCLPointCloud2(cloud2,*cloud); // pcl::PCLPointCloud2 to PointCloud
 
   pcl::StopWatch watch;
-
-
-  ////////////////////////
-  /* Channels from Elevation */
-  ////////////////////////
-  getElevationAngles(cloud_full);
+  //////////////////////////
+  /* Get Elevation Angles */
+  //////////////////////////
+  getElevationAngles(cloud);
 
   ////////////////////////
   /* Rotate Point Cloud */
   ////////////////////////
-  rotateCloud(cloud_full);
+  rotateCloud(cloud);
 
   // if (!init){
   //   init=true;
   //   pcl::io::savePCDFileASCII("output.pcd", *cloud);
   // }
-
   
   ////////////////////////
-  /* Filter Point Cloud /
+  /* Filter Point Cloud */
   ////////////////////////
-  PointCloud::Ptr cloud(new PointCloud);
-  *cloud = *cloud_full;
   filterCloud(cloud);
 
   cloud->header.frame_id = msg->header.frame_id;
@@ -112,17 +108,15 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////
   PointCloud::Ptr keypoints(new PointCloud());
 
-  estimateKeypoints(cloud_full,keypoints);
+  estimateKeypoints(cloud,keypoints);
 
   keypoints->header.frame_id = msg->header.frame_id;
   pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
   kp_pub.publish (keypoints);
 
-  std::cout << keypoints->points.size() << std::endl;
-  
-  /////////////////////
-  /* Descriptor /
-  /////////////////////
+  ////////////////
+  /* Descriptor */
+  ////////////////
   DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
   estimateDescriptors(cloud,keypoints,descriptors);
@@ -135,75 +129,55 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
   feature_pub.publish(pt_descriptors);
 
-  /* end */
-  //pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
+  pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
+  /* end */
+  
 }
 
 void FeatureExtractionNode::getElevationAngles (PointCloud::Ptr cloud){
-
   double x,xp,y,z,az,el_deg;
-
   for (int i = 0; i<cloud->points.size(); i++){
-    x = cloud->points[i].x;
-    y = cloud->points[i].y;
-    z = cloud->points[i].z;
-    
+    x = cloud->points[i].x; y = cloud->points[i].y; z = cloud->points[i].z;
     az = atan2(y,x); // azimuth
-
-    xp = cos(az)*x + sin(az)*y;
-
+    xp = cos(az)*x + sin(az)*y; 
     el_deg = atan2(z,xp)*180/M_PI; // elevation (in degrees)
-
     cloud->points[i].intensity = el_deg;
   }
-  
-
 }
 
 
 void FeatureExtractionNode::rotateCloud (PointCloud::Ptr cloud){
   PointCloud transformed_cloud;
-
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
- 
   transform.translation() << 0.0, 0.0, 0.0;
- 
   transform.rotate (  Eigen::AngleAxisf (pitch, Eigen::Vector3f::UnitY())*
                       Eigen::AngleAxisf (roll, Eigen::Vector3f::UnitX())   );
- 
   pcl::transformPointCloud (*cloud, transformed_cloud, transform);
- 
   *cloud = transformed_cloud;
 }
 
 void FeatureExtractionNode::filterCloud (PointCloud::Ptr cloud){
-
-// Filter out distance points
-pcl::PassThrough<Point> filter;
-filter.setInputCloud(cloud);
-filter.setFilterFieldName("z");
-filter.setFilterLimits(zMin, zMax);
-filter.filter(*cloud);
-
-filter.setFilterFieldName("y");
-filter.setFilterLimits(yMin, yMax);
-filter.filter(*cloud);
-
-filter.setFilterFieldName("x");
-filter.setFilterLimits(xMin, xMax);
-filter.filter(*cloud);
-
-// For Close range objects
-filter.setFilterLimitsNegative(true);
-filter.setFilterFieldName("x");
-filter.setFilterLimits(-1.0, 1.0);
-filter.filter(*cloud);
-
-filter.setFilterFieldName("y");
-filter.setFilterLimits(-1.0, 1.0);
-filter.filter(*cloud);
-
+  pcl::PassThrough<Point> filter;
+  filter.setInputCloud(cloud);
+  // --- Filter distant returns
+  filter.setFilterFieldName("z");
+  filter.setFilterLimits(zMin, zMax);
+  filter.filter(*cloud);
+  filter.setFilterFieldName("y");
+  filter.setFilterLimits(yMin, yMax);
+  filter.filter(*cloud);
+  filter.setFilterFieldName("x");
+  filter.setFilterLimits(xMin, xMax);
+  filter.filter(*cloud);
+  // --- Filter out close range returns
+  filter.setFilterLimitsNegative(true);
+  filter.setFilterFieldName("x");
+  filter.setFilterLimits(-1.0, 1.0);
+  filter.filter(*cloud);
+  filter.setFilterFieldName("y");
+  filter.setFilterLimits(-1.0, 1.0);
+  filter.filter(*cloud);
 }
 
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
@@ -213,24 +187,54 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   filter.setInputCloud(cloud);
   filter.setFilterFieldName("intensity");
 
-  PointCloud::Ptr cylinderLocations(new PointCloud); // 2d projection of point cloud
-  PointCloud::Ptr channel(new PointCloud); // 2d projection of point cloud
-  double channelElevation;
+  PointCloud::Ptr cylinderLocations(new PointCloud);
+  PointCloud::Ptr channel(new PointCloud);
+  PointCloud::Ptr keypoints_full(new PointCloud);
+  double channelElevationDegrees;
 
   for (int i = 0; i<15; ++i){
-    channelElevation = (i-7)*2-1;
-    filter.setFilterLimits(channelElevation-1.0, channelElevation+3.0); // groups of 2 channels
+    channelElevationDegrees = (i-7)*2-1;
+    filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+3.0); // groups of 2 channels
     filter.filter(*channel);
-
     getCylinderLocations(channel,cylinderLocations);
-    *keypoints += *cylinderLocations;
+    *keypoints_full += *cylinderLocations;
   }
 
+  if (keypoints_full->points.size()<=0)
+    return;
 
+  /* Combine keypoints within same proximity */
+  // Project to 2D space
+  for (int i = 0; i<keypoints_full->points.size(); ++i)
+    keypoints_full->points[i].z = 0.0;
+
+  std::vector<pcl::PointIndices> clusterIndices;
+
+  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>); // kd-tree object for searches
+  kdtree->setInputCloud(keypoints_full);
+
+  pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
+
+  clustering.setClusterTolerance(clusterRadiusThreshold);
+  clustering.setMinClusterSize(numDetectionChannels-1);
+  clustering.setMaxClusterSize(16);
+  clustering.setSearchMethod(kdtree);
+  clustering.setInputCloud(keypoints_full);
+
+  clustering.extract(clusterIndices);
+
+  std::cout << clusterIndices.size() << std::endl;
+
+  keypointsFromClusters(clusterIndices,keypoints_full,false,keypoints);
+
+  /* end */
 }
 
 void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints){
   
+  if (cloud->points.size()<=0)
+    return;
+
   // --- Project cloud into 2D space
   PointCloud::Ptr cloud2d(new PointCloud); // 2d projection of point cloud
 
@@ -246,10 +250,7 @@ void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, P
 
   pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
 
-  // Set cluster tolerance to 2cm (small values may cause objects to be divided
-  // in several clusters, whereas big values may join objects in a same cluster).
   clustering.setClusterTolerance(clusterTolerance);
-  // Set the minimum and maximum number of points that a cluster can have.
   clustering.setMinClusterSize(clusterMinCount);
   clustering.setMaxClusterSize(clusterMaxCount);
   clustering.setSearchMethod(kdtree);
@@ -257,23 +258,25 @@ void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, P
 
   clustering.extract(clusterIndices);
 
+  keypointsFromClusters(clusterIndices,cloud,true,keypoints);
+}
+
+void FeatureExtractionNode::keypointsFromClusters (const std::vector<pcl::PointIndices> clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints){
+  
   if (clusterIndices.size()<=0)
     return;
-
-  // --- Throw away clusters with radius above predefined threshold
+  
   Point pt_centroid; // stores point of the cluster centroid
-  double centerDist,maxCenterDist; 
 
   for (std::vector<pcl::PointIndices>::const_iterator i = clusterIndices.begin(); i != clusterIndices.end(); ++i){
-    // ...add all its points to a new cloud...
     PointCloud::Ptr cluster(new PointCloud);
-
+    
     for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
       cluster->points.push_back(cloud->points[*point]);
     
     if (cluster->points.size() > 0){
       Eigen::Vector4f centroid;
-      if (checkClusterCondition (cluster,centroid)) {
+      if (checkClusterCondition(cluster,centroid) || !conditionCheck) {
         pt_centroid.x = centroid[0];
         pt_centroid.y = centroid[1];
         pt_centroid.z = centroid[2];
@@ -282,6 +285,7 @@ void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, P
       }
     }
   }
+
 }
 
 bool FeatureExtractionNode::checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid){
@@ -306,11 +310,7 @@ bool FeatureExtractionNode::checkClusterCondition (const PointCloud::Ptr cluster
   }
 
   range = pow(pow(centroid[0],2)+pow(centroid[1],2),0.5);
-  if (clusterEnforceMinHeight){
-    heightThreshold = 0.5*range*tan(2*M_PI/180.0);
-  }else{
-    heightThreshold = 0.0;
-  }
+  heightThreshold = 0.5*range*tan(2*M_PI/180.0);
 
   return ((maxCenterDist<clusterRadiusThreshold) && (maxHeight>heightThreshold));
 }

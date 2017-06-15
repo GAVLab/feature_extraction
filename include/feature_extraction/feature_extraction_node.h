@@ -16,11 +16,9 @@
 // STL
 #include <iostream>
 // PCL
-// #define PCL_NO_PRECOMPILE
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
-// #include <pcl/features/normal_3d.h>
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/passthrough.h>
@@ -37,6 +35,7 @@ namespace pcl
 struct PointDescriptor
 {
   PCL_ADD_POINT4D;                  // preferred way of adding a XYZ+padding
+  float intensity;
   float descriptor[1980];
   float rf[9];
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // make sure our new allocators are aligned
@@ -48,6 +47,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointDescriptor,           // here we assume 
                                    (float, x, x)
                                    (float, y, y)
                                    (float, z, z)
+                                   (float, intensity, intensity)
                                    (float[1980], descriptor, shape_context)
                                    (float[9], rf, rf)
 )
@@ -92,6 +92,8 @@ class FeatureExtractionNode
 
     void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
+    void keypointsFromClusters (const std::vector<pcl::PointIndices> clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints);
+
     bool checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid);
 
     void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
@@ -117,9 +119,9 @@ class FeatureExtractionNode
     double clusterTolerance;            // Tolerance for point cloud segmentation (as a measure in L2 Euclidean space)
     int clusterMinCount;                 // Minimum number of points in a cluster
     int clusterMaxCount;                // Maximum number of points in a cluster
-    
     double clusterRadiusThreshold;      
-    bool clusterEnforceMinHeight;
+    int numDetectionChannels;
+
     // Descriptor
     double descriptorRadius;
     // Other
