@@ -78,6 +78,13 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl::fromPCLPointCloud2(cloud2,*cloud_full); // pcl::PCLPointCloud2 to PointCloud
 
   pcl::StopWatch watch;
+
+
+  ////////////////////////
+  /* Channels from Elevation */
+  ////////////////////////
+  getElevationAngles(cloud_full);
+
   ////////////////////////
   /* Rotate Point Cloud */
   ////////////////////////
@@ -88,8 +95,9 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   //   pcl::io::savePCDFileASCII("output.pcd", *cloud);
   // }
 
+  
   ////////////////////////
-  /* Filter Point Cloud */
+  /* Filter Point Cloud /
   ////////////////////////
   PointCloud::Ptr cloud(new PointCloud);
   *cloud = *cloud_full;
@@ -104,14 +112,16 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////
   PointCloud::Ptr keypoints(new PointCloud());
 
-  estimateKeypoints(cloud,keypoints);
+  estimateKeypoints(cloud_full,keypoints);
 
   keypoints->header.frame_id = msg->header.frame_id;
   pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
   kp_pub.publish (keypoints);
 
+  std::cout << keypoints->points.size() << std::endl;
+  
   /////////////////////
-  /* Descriptor */
+  /* Descriptor /
   /////////////////////
   DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
@@ -125,13 +135,34 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
   feature_pub.publish(pt_descriptors);
 
-  
+  /* end */
   //pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
 }
 
-void FeatureExtractionNode::rotateCloud (PointCloud::Ptr cloud)
-{
+void FeatureExtractionNode::getElevationAngles (PointCloud::Ptr cloud){
+
+  double x,xp,y,z,az,el_deg;
+
+  for (int i = 0; i<cloud->points.size(); i++){
+    x = cloud->points[i].x;
+    y = cloud->points[i].y;
+    z = cloud->points[i].z;
+    
+    az = atan2(y,x); // azimuth
+
+    xp = cos(az)*x + sin(az)*y;
+
+    el_deg = atan2(z,xp)*180/M_PI; // elevation (in degrees)
+
+    cloud->points[i].intensity = el_deg;
+  }
+  
+
+}
+
+
+void FeatureExtractionNode::rotateCloud (PointCloud::Ptr cloud){
   PointCloud transformed_cloud;
 
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
@@ -177,13 +208,36 @@ filter.filter(*cloud);
 
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
 {
+  
+  pcl::PassThrough<Point> filter;
+  filter.setInputCloud(cloud);
+  filter.setFilterFieldName("intensity");
+
+  PointCloud::Ptr cylinderLocations(new PointCloud); // 2d projection of point cloud
+  PointCloud::Ptr channel(new PointCloud); // 2d projection of point cloud
+  double channelElevation;
+
+  for (int i = 0; i<15; ++i){
+    channelElevation = (i-7)*2-1;
+    filter.setFilterLimits(channelElevation-1.0, channelElevation+3.0); // groups of 2 channels
+    filter.filter(*channel);
+
+    getCylinderLocations(channel,cylinderLocations);
+    *keypoints += *cylinderLocations;
+  }
+
+
+}
+
+void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints){
+  
   // --- Project cloud into 2D space
   PointCloud::Ptr cloud2d(new PointCloud); // 2d projection of point cloud
 
   *cloud2d = *cloud; 
   for (int ii = 0; ii<cloud->points.size(); ++ii)
     cloud2d->points[ii].z = 0.0;
-  
+
   // --- Perform Euclidean clustering (in 2D space)
   std::vector<pcl::PointIndices> clusterIndices;
 
@@ -210,8 +264,7 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   Point pt_centroid; // stores point of the cluster centroid
   double centerDist,maxCenterDist; 
 
-  for (std::vector<pcl::PointIndices>::const_iterator i = clusterIndices.begin(); i != clusterIndices.end(); ++i)
-  {
+  for (std::vector<pcl::PointIndices>::const_iterator i = clusterIndices.begin(); i != clusterIndices.end(); ++i){
     // ...add all its points to a new cloud...
     PointCloud::Ptr cluster(new PointCloud);
 
@@ -224,15 +277,11 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
         pt_centroid.x = centroid[0];
         pt_centroid.y = centroid[1];
         pt_centroid.z = centroid[2];
-        pt_centroid.intensity = centroid[3];
-
+        
         keypoints->points.push_back(pt_centroid);
       }
-
     }
-
   }
-  
 }
 
 bool FeatureExtractionNode::checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid){

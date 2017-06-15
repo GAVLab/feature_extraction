@@ -16,21 +16,17 @@
 // STL
 #include <iostream>
 // PCL
-#define PCL_NO_PRECOMPILE
+// #define PCL_NO_PRECOMPILE
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/features/shot.h>
+// #include <pcl/features/normal_3d.h>
 #include <pcl/filters/conditional_removal.h>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/passthrough.h>
 
 #include <pcl/segmentation/extract_clusters.h>
-#include <pcl/segmentation/conditional_euclidean_clustering.h>
 
-#include <pcl/features/spin_image.h>
-// #include <pcl/io/pcd_io.h>
 #include <pcl/common/time.h>
 
 #include <pcl/features/3dsc.h>
@@ -41,7 +37,6 @@ namespace pcl
 struct PointDescriptor
 {
   PCL_ADD_POINT4D;                  // preferred way of adding a XYZ+padding
-  float intensity;
   float descriptor[1980];
   float rf[9];
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // make sure our new allocators are aligned
@@ -53,7 +48,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointDescriptor,           // here we assume 
                                    (float, x, x)
                                    (float, y, y)
                                    (float, z, z)
-                                   (float, intensity, intensity)
                                    (float[1980], descriptor, shape_context)
                                    (float[9], rf, rf)
 )
@@ -72,7 +66,7 @@ class FeatureExtractionNode
     typedef pcl::Normal Normal;
     typedef pcl::PointCloud<Normal> NormalCloud;
 
-    typedef pcl::PointXYZINormal PointNormal;
+    typedef pcl::PointNormal PointNormal;
     typedef pcl::PointCloud<PointNormal> PointNormalCloud;
 
     typedef pcl::ShapeContext1980 Descriptor;
@@ -89,6 +83,10 @@ class FeatureExtractionNode
   private:
 
     void printRosParameters (void);
+
+    void getElevationAngles (PointCloud::Ptr cloud);
+
+    void getCylinderLocations (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
     void rotateCloud (PointCloud::Ptr cloud);
 
