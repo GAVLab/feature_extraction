@@ -72,22 +72,22 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////////
   /* Point Cloud Conversion */
   ////////////////////////////
-  PointCloud::Ptr cloud(new PointCloud);
+  PointCloud::Ptr cloud_full(new PointCloud);
 
   pcl::PCLPointCloud2 cloud2;
   pcl_conversions::toPCL(*msg,cloud2); // sensor_msgs::PointCloud2 to pcl::PCLPointCloud2
-  pcl::fromPCLPointCloud2(cloud2,*cloud); // pcl::PCLPointCloud2 to PointCloud
+  pcl::fromPCLPointCloud2(cloud2,*cloud_full); // pcl::PCLPointCloud2 to PointCloud
 
   pcl::StopWatch watch;
   //////////////////////////
   /* Get Elevation Angles */
   //////////////////////////
-  getElevationAngles(cloud);
+  getElevationAngles(cloud_full);
 
   ////////////////////////
   /* Rotate Point Cloud */
   ////////////////////////
-  rotateCloud(cloud);
+  rotateCloud(cloud_full);
 
   // if (!init){
   //   init=true;
@@ -97,6 +97,8 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
+  PointCloud::Ptr cloud(new PointCloud);
+  *cloud = *cloud_full;
   filterCloud(cloud);
 
   cloud->header.frame_id = msg->header.frame_id;
@@ -119,7 +121,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////
   DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
-  estimateDescriptors(cloud,keypoints,descriptors);
+  estimateDescriptors(cloud_full,keypoints,descriptors);
 
   PointDescriptorCloud::Ptr pt_descriptors(new PointDescriptorCloud());
 
