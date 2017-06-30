@@ -25,10 +25,7 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
   nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
-  nh.param("number_detection_channels", numDetectionChannels, 3);
-
-  if (numDetectionChannels<2)
-    numDetectionChannels = 2;
+  nh.param("detection_channel", detectionChannel, 8);
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
@@ -193,45 +190,13 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   filter.setInputCloud(cloud);
   filter.setFilterFieldName("intensity");
 
-  PointCloud::Ptr cylinderLocations(new PointCloud);
   PointCloud::Ptr channel(new PointCloud);
-  PointCloud::Ptr keypoints_full(new PointCloud);
   double channelElevationDegrees;
 
-  for (int i = 0; i<15; ++i){
-    channelElevationDegrees = (i-7)*2-1;
-    filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+3.0); // groups of 2 channels
-    filter.filter(*channel);
-    getCylinderLocations(channel,cylinderLocations);
-    *keypoints_full += *cylinderLocations;
-  }
-
-  if (keypoints_full->points.size()<=0)
-    return;
-
-  /* Combine keypoints within same proximity */
-  // Project to 2D space
-  for (int i = 0; i<keypoints_full->points.size(); ++i)
-    keypoints_full->points[i].z = 0.0;
-
-  std::vector<pcl::PointIndices> clusterIndices;
-
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>); // kd-tree object for searches
-  kdtree->setInputCloud(keypoints_full);
-
-  pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
-
-  clustering.setClusterTolerance(clusterRadiusThreshold);
-  clustering.setMinClusterSize(numDetectionChannels-1);
-  clustering.setMaxClusterSize(16);
-  clustering.setSearchMethod(kdtree);
-  clustering.setInputCloud(keypoints_full);
-
-  clustering.extract(clusterIndices);
-
-  std::cout << clusterIndices.size() << std::endl;
-
-  keypointsFromClusters(clusterIndices,keypoints_full,false,keypoints);
+  channelElevationDegrees = (detectionChannel-7)*2-1;
+  filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+3.0); // groups of 2 channels
+  filter.filter(*channel);
+  getCylinderLocations(channel,keypoints);
 
   /* end */
 }

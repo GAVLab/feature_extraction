@@ -120,7 +120,7 @@ class FeatureExtractionNode
     int clusterMinCount;                 // Minimum number of points in a cluster
     int clusterMaxCount;                // Maximum number of points in a cluster
     double clusterRadiusThreshold;      
-    int numDetectionChannels;
+    int detectionChannel;
 
     // Descriptor
     double descriptorRadius;
