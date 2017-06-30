@@ -101,9 +101,13 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   *cloud = *cloud_full;
   filterCloud(cloud);
 
-  cloud->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
-  filt_pub.publish (cloud);
+  // cloud->header.frame_id = msg->header.frame_id;
+  // pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
+  // filt_pub.publish (cloud);
+
+  cloud_full->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, cloud_full->header.stamp);
+  filt_pub.publish (cloud_full);
   
   ////////////////////////
   /* Keypoint detection */
