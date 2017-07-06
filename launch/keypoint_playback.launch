@@ -5,7 +5,7 @@
   <!-- <arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/> -->
 
 
-  <arg name="bagfile" default="ion_gnss_forestry_loop_trimmed.bag"/>
+  <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
   <arg name="start_time" default="0"/>
   <arg name="bagpath" default="/media/psf/Home/Desktop"/>
 
@@ -30,8 +30,8 @@
     <param name="y_max" value="25.0"/>
     <param name="y_min" value="-25.0"/>
     
-    <param name="z_max" value="2.0"/>
-    <param name="z_min" value="-1.0"/>
+    <param name="z_max" value="10.0"/>
+    <param name="z_min" value="-10"/>
 
     <param name="descriptor_radius" value="2.5"/>
 
