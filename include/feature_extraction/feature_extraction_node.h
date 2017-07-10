@@ -59,6 +59,9 @@ class FeatureExtractionNode
 {
 
   public:
+    
+    typedef std::vector<pcl::PointIndices> IndicesClusters;
+    typedef boost::shared_ptr<IndicesClusters> IndicesClustersPtr;
 
     typedef pcl::PointXYZI Point;
     typedef pcl::PointCloud<Point> PointCloud;
@@ -92,9 +95,7 @@ class FeatureExtractionNode
 
     void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
 
-    void keypointsFromClusters (const std::vector<pcl::PointIndices> clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints);
-
-    bool checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid);
+    void keypointsFromClusters (const IndicesClustersPtr clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints);
 
     void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
 
@@ -120,8 +121,7 @@ class FeatureExtractionNode
     int clusterMinCount;                 // Minimum number of points in a cluster
     int clusterMaxCount;                // Maximum number of points in a cluster
     double clusterRadiusThreshold;      
-    int numDetectionChannels;
-
+    int detectionChannelThreshold;
     // Descriptor
     double descriptorRadius;
     // Other

@@ -1,6 +1,6 @@
 # feature_extraction #
 
-A ROS package for feature extraction through PCL. The "features" are tall, cylindrical objects such as light posts or trees.
+A ROS package for feature extraction through PCL. The features include tall, cylindrical objects such as light posts or trees.
 
 ## Dependencies ##
 - pcl
@@ -22,4 +22,10 @@ Feature extraction is performed as follows:
 a) For each of the 16 channels, segmentation is performed conditioned on
 - min/max number of points
 - cluster tolerance (min distance from one cluster to the next)
-- cluster radius threshold 
+- cluster radius threshold (max size of a cluster)
+
+b) From the resulting clusters, segmentation is performed once again to group clusters belonging to the same object. This secondary segmentation is conditioned on
+- min number of points (num_detection_channels) to reject non-cylindrical objects
+- cluster tolerance (same as before)
+
+c) Features are projected to a 2D space (with z=0)

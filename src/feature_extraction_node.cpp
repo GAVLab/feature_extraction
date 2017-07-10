@@ -25,15 +25,14 @@ FeatureExtractionNode::FeatureExtractionNode()
   nh.param("cluster_min_count", clusterMinCount, 5);
   nh.param("cluster_max_count", clusterMaxCount, 50);
   nh.param("cluster_radius_threshold", clusterRadiusThreshold, 0.15);
-  nh.param("number_detection_channels", numDetectionChannels, 3);
-
-  if (numDetectionChannels<2)
-    numDetectionChannels = 2;
+  nh.param("number_detection_channels", detectionChannelThreshold, 1);
 
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
   ///////////////////////////////////
   nh.param("descriptor_radius", descriptorRadius, 2.5);
+
+  // printRosParameters();
 
   ////////////////////////////////
   /* ROS Publishers/Subscribers */
@@ -44,7 +43,6 @@ FeatureExtractionNode::FeatureExtractionNode()
   feature_pub = nh.advertise<PointDescriptorCloud> ("features", 0);
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
   filt_pub = nh.advertise<PointCloud> ("cloud", 0);
-  
 }
 
 FeatureExtractionNode::~FeatureExtractionNode()
@@ -105,9 +103,9 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   // pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
   // filt_pub.publish (cloud);
 
-  cloud_full->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, cloud_full->header.stamp);
-  filt_pub.publish (cloud_full);
+  cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
+  filt_pub.publish (cloud);
   
   ////////////////////////
   /* Keypoint detection */
@@ -138,6 +136,8 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
   /* end */
+
+  pcl::console::print_highlight ("Loop time: %lfs\n", watch.getTimeSeconds ());
   
 }
 
@@ -166,7 +166,7 @@ void FeatureExtractionNode::rotateCloud (PointCloud::Ptr cloud){
 void FeatureExtractionNode::filterCloud (PointCloud::Ptr cloud){
   pcl::PassThrough<Point> filter;
   filter.setInputCloud(cloud);
-  // --- Filter distant returns
+  /* Filter distant returns */
   filter.setFilterFieldName("z");
   filter.setFilterLimits(zMin, zMax);
   filter.filter(*cloud);
@@ -176,33 +176,28 @@ void FeatureExtractionNode::filterCloud (PointCloud::Ptr cloud){
   filter.setFilterFieldName("x");
   filter.setFilterLimits(xMin, xMax);
   filter.filter(*cloud);
-  // --- Filter out close range returns
-  filter.setFilterLimitsNegative(true);
-  filter.setFilterFieldName("x");
-  filter.setFilterLimits(-1.0, 1.0);
-  filter.filter(*cloud);
-  filter.setFilterFieldName("y");
-  filter.setFilterLimits(-1.0, 1.0);
-  filter.filter(*cloud);
+  /* end */
 }
 
 void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
 {
-  
+  /* Keypoint Detection */
   pcl::PassThrough<Point> filter;
   filter.setInputCloud(cloud);
   filter.setFilterFieldName("intensity");
 
-  PointCloud::Ptr cylinderLocations(new PointCloud);
-  PointCloud::Ptr channel(new PointCloud);
   PointCloud::Ptr keypoints_full(new PointCloud);
   double channelElevationDegrees;
 
-  for (int i = 0; i<15; ++i){
+  for (int i = 0; i<16; ++i){
+    PointCloud::Ptr cylinderLocations(new PointCloud);
+    PointCloud::Ptr channel(new PointCloud);
+    
     channelElevationDegrees = (i-7)*2-1;
-    filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+3.0); // groups of 2 channels
+    filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+1.0); // group by channels
     filter.filter(*channel);
     getCylinderLocations(channel,cylinderLocations);
+
     *keypoints_full += *cylinderLocations;
   }
 
@@ -210,26 +205,26 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
     return;
 
   /* Combine keypoints within same proximity */
-  // Project to 2D space
-  for (int i = 0; i<keypoints_full->points.size(); ++i)
-    keypoints_full->points[i].z = 0.0;
+  double zhold[keypoints_full->points.size()];
 
-  std::vector<pcl::PointIndices> clusterIndices;
+  for (int i = 0; i<keypoints_full->points.size(); ++i){
+    zhold[i] = keypoints_full->points[i].z;
+    keypoints_full->points[i].z = keypoints_full->points[i].intensity*0.75*clusterRadiusThreshold/2;
+  }
 
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>); // kd-tree object for searches
-  kdtree->setInputCloud(keypoints_full);
+  IndicesClustersPtr clusterIndices (new IndicesClusters);
 
   pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
 
-  clustering.setClusterTolerance(clusterRadiusThreshold);
-  clustering.setMinClusterSize(numDetectionChannels-1);
-  clustering.setMaxClusterSize(16);
-  clustering.setSearchMethod(kdtree);
   clustering.setInputCloud(keypoints_full);
+  clustering.setClusterTolerance(clusterRadiusThreshold);
+  clustering.setMinClusterSize(detectionChannelThreshold);
+  clustering.setMaxClusterSize(16);
 
-  clustering.extract(clusterIndices);
+  clustering.extract(*clusterIndices);
 
-  std::cout << clusterIndices.size() << std::endl;
+  for (int i = 0; i<keypoints_full->points.size(); ++i)
+    keypoints_full->points[i].z = zhold[i];
 
   keypointsFromClusters(clusterIndices,keypoints_full,false,keypoints);
 
@@ -241,84 +236,64 @@ void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, P
   if (cloud->points.size()<=0)
     return;
 
-  // --- Project cloud into 2D space
-  PointCloud::Ptr cloud2d(new PointCloud); // 2d projection of point cloud
-
-  *cloud2d = *cloud; 
-  for (int ii = 0; ii<cloud->points.size(); ++ii)
-    cloud2d->points[ii].z = 0.0;
-
-  // --- Perform Euclidean clustering (in 2D space)
-  std::vector<pcl::PointIndices> clusterIndices;
-
-  pcl::search::KdTree<Point>::Ptr kdtree(new pcl::search::KdTree<Point>); // kd-tree object for searches
-  kdtree->setInputCloud(cloud2d);
+  // --- Perform Euclidean clustering
+  IndicesClustersPtr clusterIndices (new IndicesClusters);
 
   pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
 
+  clustering.setInputCloud(cloud);
   clustering.setClusterTolerance(clusterTolerance);
   clustering.setMinClusterSize(clusterMinCount);
   clustering.setMaxClusterSize(clusterMaxCount);
-  clustering.setSearchMethod(kdtree);
-  clustering.setInputCloud(cloud2d);
 
-  clustering.extract(clusterIndices);
+  clustering.extract(*clusterIndices);
 
   keypointsFromClusters(clusterIndices,cloud,true,keypoints);
+
 }
 
-void FeatureExtractionNode::keypointsFromClusters (const std::vector<pcl::PointIndices> clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints){
+void FeatureExtractionNode::keypointsFromClusters (const IndicesClustersPtr clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints){
   
-  if (clusterIndices.size()<=0)
+  if (clusterIndices->size()<=0)
     return;
-  
-  Point pt_centroid; // stores point of the cluster centroid
 
-  for (std::vector<pcl::PointIndices>::const_iterator i = clusterIndices.begin(); i != clusterIndices.end(); ++i){
-    PointCloud::Ptr cluster(new PointCloud);
+  for (int i = 0; i < clusterIndices->size (); ++i){
     
-    for (std::vector<int>::const_iterator point = i->indices.begin(); point != i->indices.end(); point++)
-      cluster->points.push_back(cloud->points[*point]);
+    Point pt_centroid; // stores point of the cluster centroid
+
+    double x,y,z;
+    double sumx = 0.0, sumy = 0.0, sumz = 0.0;
+    double minx = 1000.0, maxx = -1000.0;
+    double miny = 1000.0, maxy = -1000.0;
+    int clusterSize = (*clusterIndices)[i].indices.size ();
+
+    for (int j = 0; j < clusterSize; ++j){
+      x = cloud->points[(*clusterIndices)[i].indices[j]].x;
+      y = cloud->points[(*clusterIndices)[i].indices[j]].y;
+      z = cloud->points[(*clusterIndices)[i].indices[j]].z;
+      sumx += x; sumy += y; sumz += z;
+      if (x<minx)
+        minx=x;
+      if (y<miny)
+        miny=y;
+      if (x>maxx)
+        maxx=x;
+      if (y>maxy)
+        maxy=y;
+    }
+
+    double diameter = pow(pow(maxx-minx,2)+pow(maxy-miny,2),0.5);
     
-    if (cluster->points.size() > 0){
-      Eigen::Vector4f centroid;
-      if (checkClusterCondition(cluster,centroid) || !conditionCheck) {
-        pt_centroid.x = centroid[0];
-        pt_centroid.y = centroid[1];
-        pt_centroid.z = centroid[2];
-        
-        keypoints->points.push_back(pt_centroid);
-      }
+    if ((diameter<(2*clusterRadiusThreshold)) || !conditionCheck ){
+      pt_centroid.x = sumx/( (double) clusterSize );
+      pt_centroid.y = sumy/( (double) clusterSize );
+      pt_centroid.z = sumz/( (double) clusterSize );
+      pt_centroid.intensity = cloud->points[(*clusterIndices)[i].indices[0]].intensity;
+
+      keypoints->points.push_back(pt_centroid);
     }
   }
 
-}
-
-bool FeatureExtractionNode::checkClusterCondition (const PointCloud::Ptr cluster, Eigen::Vector4f& centroid){
-
-  if (cluster->points.size()<=0)
-    return false;
-
-  double range,heightThreshold;
-  double centerDist,height;
-  double maxCenterDist = 0.0;
-  double maxHeight = 0.0;
-  
-  pcl::compute3DCentroid(*cluster, centroid);
-
-  for (int ii = 0; ii<cluster->points.size(); ++ii){
-    centerDist = pow(pow(cluster->points[ii].x-centroid[0],2)+pow(cluster->points[ii].y-centroid[1],2),0.5);
-    height = pow(pow(cluster->points[ii].z-centroid[2],2),0.5);
-    if (centerDist > maxCenterDist)
-      maxCenterDist = centerDist;
-    if (height > maxHeight)
-      maxHeight = height;
-  }
-
-  range = pow(pow(centroid[0],2)+pow(centroid[1],2),0.5);
-  heightThreshold = 0.5*range*tan(2*M_PI/180.0);
-
-  return ((maxCenterDist<clusterRadiusThreshold) && (maxHeight>heightThreshold));
 }
 
 void FeatureExtractionNode::estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors)
@@ -361,7 +336,7 @@ void FeatureExtractionNode::printRosParameters (void)
   // std::cout << "Normal Estimation Parameters:" << std::endl;
   // std::cout << "    normal_number_neighbors: " << nnNormal << std::endl;
   // std::cout << "Keypoint Detection Parameters:" << std::endl;
-  // std::cout << "    number_of_threads: " << numThreads << std::endl;
+  // std::cout << "    number_detection_channels: " << detectionChannelThreshold << std::endl;
   // std::cout << "    refine: " << refine << std::endl;
   // std::cout << "    non_max_supression: " << nonMaxSupression << std::endl;
   // std::cout << "    threshold: " << threshold << std::endl;
