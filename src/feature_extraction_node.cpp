@@ -133,8 +133,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
   feature_pub.publish(pt_descriptors);
 
-  pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
-
   /* end */
 
   pcl::console::print_highlight ("Loop time: %lfs\n", watch.getTimeSeconds ());
