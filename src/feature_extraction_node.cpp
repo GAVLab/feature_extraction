@@ -88,11 +88,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   ////////////////////////
   rotateCloud(cloud_full);
 
-  // if (!init){
-  //   init=true;
-  //   pcl::io::savePCDFileASCII("output.pcd", *cloud);
-  // }
-  
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
@@ -279,6 +274,7 @@ void FeatureExtractionNode::getCylinderSegments (const PointCloud::Ptr cloud, Po
   for (int i = 0; i < clusterIndices->size (); ++i){
     
     Point pt_centroid; // stores point of the cluster centroid
+    PointCloud::Ptr cluster(new PointCloud); // the point cloud of the current cluster
 
     double x,y,z;
     double sumx = 0.0, sumy = 0.0, sumz = 0.0;
@@ -299,6 +295,12 @@ void FeatureExtractionNode::getCylinderSegments (const PointCloud::Ptr cloud, Po
         maxx=x;
       if (y>maxy)
         maxy=y;
+
+      Point pt; // stores point of the cluster centroid
+      pt.x = x; pt.y = y; pt.z = z; 
+      pt.intensity = cloud->points[(*clusterIndices)[i].indices[j]].intensity;
+      cluster->points.push_back(pt);
+
     }
 
     double diameter = pow(pow(maxx-minx,2)+pow(maxy-miny,2),0.5);
@@ -310,6 +312,7 @@ void FeatureExtractionNode::getCylinderSegments (const PointCloud::Ptr cloud, Po
       pt_centroid.intensity = cloud->points[(*clusterIndices)[i].indices[0]].intensity;
 
       keypoints->points.push_back(pt_centroid);
+      *keypoint_cloud += *cluster;
     }
   }
 
