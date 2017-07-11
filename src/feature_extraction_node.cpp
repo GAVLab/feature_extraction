@@ -86,11 +86,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   /* Rotate Point Cloud */
   ////////////////////////
   rotateCloud(cloud_full);
-
-  // if (!init){
-  //   init=true;
-  //   pcl::io::savePCDFileASCII("output.pcd", *cloud);
-  // }
   
   ////////////////////////
   /* Filter Point Cloud */
@@ -98,10 +93,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   PointCloud::Ptr cloud(new PointCloud);
   *cloud = *cloud_full;
   filterCloud(cloud);
-
-  // cloud->header.frame_id = msg->header.frame_id;
-  // pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
-  // filt_pub.publish (cloud);
 
   cloud->header.frame_id = msg->header.frame_id;
   pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
