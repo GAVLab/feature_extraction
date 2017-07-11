@@ -95,10 +95,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   *cloud = *cloud_full;
   filterCloud(cloud);
 
-  cloud->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
-  cloud_pub.publish (cloud);
-  
   ////////////////////////
   /* Keypoint detection */
   ////////////////////////
@@ -106,14 +102,6 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   PointCloud::Ptr keypoint_cloud(new PointCloud());
 
   estimateKeypoints(cloud,keypoints,keypoint_cloud);
-
-  keypoints->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
-  kp_pub.publish (keypoints);
-
-  keypoint_cloud->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, keypoint_cloud->header.stamp);
-  kpc_pub.publish (keypoint_cloud);
 
   ////////////////
   /* Descriptor *
@@ -129,7 +117,23 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   pt_descriptors->header.frame_id = msg->header.frame_id;
   pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
   feature_pub.publish(pt_descriptors);
+  
 
+  ////////////////
+  /* Publishers */
+  ////////////////
+  keypoints->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
+  kp_pub.publish (keypoints);
+
+  keypoint_cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, keypoint_cloud->header.stamp);
+  kpc_pub.publish (keypoint_cloud);
+
+  cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
+  cloud_pub.publish (cloud);
+  
   /* end */
 
   pcl::console::print_highlight ("Loop time: %lfs\n", watch.getTimeSeconds ());
@@ -235,15 +239,15 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
     int clusterSize = (*clusterIndices)[i].indices.size ();
 
     for (int j = 0; j < clusterSize; ++j){
-      sumx += cloud->points[(*clusterIndices)[i].indices[j]].x;
-      sumy += cloud->points[(*clusterIndices)[i].indices[j]].y;
-      sumz += cloud->points[(*clusterIndices)[i].indices[j]].z;
+      sumx += keypoints_full->points[(*clusterIndices)[i].indices[j]].x;
+      sumy += keypoints_full->points[(*clusterIndices)[i].indices[j]].y;
+      sumz += keypoints_full->points[(*clusterIndices)[i].indices[j]].z;
     }
 
     pt_centroid.x = sumx/( (double) clusterSize );
     pt_centroid.y = sumy/( (double) clusterSize );
     pt_centroid.z = sumz/( (double) clusterSize );
-    pt_centroid.intensity = cloud->points[(*clusterIndices)[i].indices[0]].intensity;
+    pt_centroid.intensity = keypoints_full->points[(*clusterIndices)[i].indices[0]].intensity;
 
     keypoints->points.push_back(pt_centroid);
   }

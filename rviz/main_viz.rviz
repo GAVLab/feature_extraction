@@ -152,7 +152,7 @@ Visualization Manager:
       Queue Size: 1
       Selectable: false
       Size (Pixels): 3
-      Size (m): 0.05
+      Size (m): 0.1
       Style: Squares
       Topic: /feature_extraction_node/keypoint_cloud
       Unreliable: false
@@ -218,5 +218,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1855
-  X: 203
-  Y: 162
+  X: 55
+  Y: 14
