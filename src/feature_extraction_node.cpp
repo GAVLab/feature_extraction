@@ -33,19 +33,21 @@ FeatureExtractionNode::FeatureExtractionNode()
   ///////////////////////////////////
   /* Feature Descriptor Parameters */
   ///////////////////////////////////
-
+  nh.param("estimate_descriptors", descriptorEstimation, true);
 
   ////////////////////////////////
   /* ROS Publishers/Subscribers */
   ////////////////////////////////
-  pc_sub = nh.subscribe ("/velodyne_points", 0, &FeatureExtractionNode::cloudCallback, this);
-  imu_sub = nh.subscribe ("/xsens/data", 0, &FeatureExtractionNode::imuCallback, this);
-
-  feature_pub = nh.advertise< DescriptorCloud > ("features", 0);
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
   filt_pub = nh.advertise<PointCloud> ("cloud_filt", 0);
   norm_pub = nh.advertise<PointNormalCloud> ("normals", 0);
   norm2d_pub = nh.advertise<PointNormalCloud> ("normals2d", 0);
+  if (descriptorEstimation)
+    feature_pub = nh.advertise< DescriptorCloud > ("features", 0);
+
+  pc_sub = nh.subscribe ("/velodyne_points", 0, &FeatureExtractionNode::cloudCallback, this);
+  imu_sub = nh.subscribe ("/xsens/data", 0, &FeatureExtractionNode::imuCallback, this);
+
 
 }
 
@@ -134,14 +136,16 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   /////////////////////
   /* SHOT Descriptor */
   /////////////////////
-  DescriptorCloud::Ptr descriptors(new DescriptorCloud());
+  if (descriptorEstimation) {
+    DescriptorCloud::Ptr descriptors(new DescriptorCloud());
 
-  estimateDescriptors(cloud,normals,keypoints,descriptors);
-  
-  descriptors->header.frame_id = msg->header.frame_id;
-  feature_pub.publish(descriptors);
+    estimateDescriptors(cloud,normals,keypoints,descriptors);
+    
+    descriptors->header.frame_id = msg->header.frame_id;
+    feature_pub.publish(descriptors);
+  }
 
-  pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
+  // pcl::console::print_highlight ("Extracted %zd points (out of %zd) in %lfs\n", keypoints->size (), cloud->size (), watch.getTimeSeconds ());
 
 }
 

@@ -90,7 +90,7 @@ class FeatureExtractionNode
     double zMin,zMax,xMin,xMax,yMin,yMax; // Bounds of point cloud pass through filter
     double roll,pitch;                  // Roll/pitch estimate for rotating point cloud to local-level frame
     // Normal estimation
-    double normRadius;                       // number of neighbors used to estimate surface normal
+    double normRadius;                  // number of neighbors used to estimate surface normal
     // Detector
     int kpNumThreads;                   // number of threads in calculating harris keypoints
     bool kpRefine;                      // keypoint refine boolean
@@ -99,8 +99,9 @@ class FeatureExtractionNode
     double kpRadius;                    // radius (in meters) for gathering neighbors
     
     bool init;
-    // Descriptor
 
+    // Descriptor
+    bool descriptorEstimation;          // whether or not to estimate and publish descriptor
 
 };
 
