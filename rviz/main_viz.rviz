@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
         - /PointCloud21
-        - /PointCloud22
+        - /PointCloud23
       Splitter Ratio: 0.5
     Tree Height: 232
   - Class: rviz/Selection
@@ -59,7 +59,7 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 255; 255; 255
+      Color: 211; 211; 211
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -128,6 +128,36 @@ Visualization Manager:
       Name: Axes
       Radius: 0.1
       Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1.77766
+        Min Value: 0.131108
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 73; 110; 156
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 9
+      Min Color: 0; 0; 0
+      Min Intensity: 1
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.1
+      Style: Squares
+      Topic: /feature_extraction_node/keypoint_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
       Value: true
   Enabled: true
   Global Options:

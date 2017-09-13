@@ -89,13 +89,11 @@ class FeatureExtractionNode
 
     void getElevationAngles (PointCloud::Ptr cloud);
 
-    void getCylinderLocations (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
-
     void rotateCloud (PointCloud::Ptr cloud);
 
-    void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints);
+    void estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints, PointCloud::Ptr keypoint_cloud);
 
-    void keypointsFromClusters (const IndicesClustersPtr clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints);
+    void getCylinderSegments (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints, PointCloud::Ptr keypoint_cloud);
 
     void estimateDescriptors (const PointCloud::Ptr cloud, const PointCloud::Ptr keypoints, DescriptorCloud::Ptr descriptors);
 
@@ -105,7 +103,8 @@ class FeatureExtractionNode
     // --- Publisher
     ros::Publisher feature_pub;         // Feature publisher
     ros::Publisher kp_pub;              // Keypoint publisher
-    ros::Publisher filt_pub;            // Filtered point cloud publisher
+    ros::Publisher kpc_pub;              // Keypoint cloud publisher
+    ros::Publisher cloud_pub;            // Filtered point cloud publisher
 
     // --- Subscribers
     ros::Subscriber pc_sub;             // Point cloud subscriber

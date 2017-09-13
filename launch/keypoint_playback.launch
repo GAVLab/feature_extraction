@@ -1,17 +1,14 @@
 <launch>
 
-  <!-- <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/> -->
-  <!-- <arg name="start_time" default="20"/> -->
-  <!-- <arg name="bagpath" default="/media/psf/Google\ Drive/GAVLAB/data/ion_gnss_2017/trimmed"/> -->
+  <arg name="bagpath" default="/media/psf/Home/Google Drive/GAVLAB/data/ion_gnss_2017/trimmed"/>
 
+<arg name="bagfile" default="$(arg bagpath)/ion_gnss_parking_deck_take4_trimmed"/>
 
-  <arg name="bagfile" default="ion_gnss_parking_deck_trimmed.bag"/>
-  <arg name="start_time" default="0"/>
-  <arg name="bagpath" default="/media/psf/Home/Desktop"/>
+  <arg name="start_time" default="48"/>
 
   <!-- bagfile playback -->
-  <node name="player" pkg="rosbag" type="play" output="screen"
-    args="-s $(arg start_time) -l -q --clock -r 1.0 $(arg bagpath)/$(arg bagfile)" />
+    <param name="use_sim_time" value="true"/>
+  <node name="player" pkg="rosbag" type="play" args="-s $(arg start_time) -l --clock -r 1.0 '$(arg bagfile).bag'" />
 
 
   <node pkg="feature_extraction" type="feature_extraction_node" name="feature_extraction_node" output="screen" >
@@ -25,23 +22,17 @@
     <param name="cluster_radius_threshold" value="0.2"/>
     <param name="number_detection_channels" value="2"/>
 
-    <param name="x_max" value="50.0"/>
+    <param name="x_max" value="100.0"/>
     <param name="x_min" value="0.0"/>
-    <param name="y_max" value="25.0"/>
-    <param name="y_min" value="-25.0"/>
+    <param name="y_max" value="50.0"/>
+    <param name="y_min" value="-50.0"/>
     
-    <param name="z_max" value="3.0"/>
-    <param name="z_min" value="-0.5"/>
+    <param name="z_max" value="4.0"/>
+    <param name="z_min" value="-1.5"/>
 
     <param name="descriptor_radius" value="2.5"/>
 
   </node>
-
-
-
-
-
-
 
   <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find feature_extraction)/rviz/vel_and_kp_viz.rviz"/> -->
 

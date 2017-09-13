@@ -39,7 +39,8 @@ FeatureExtractionNode::FeatureExtractionNode()
   /* ROS Publishers/Subscribers */
   ////////////////////////////////
   kp_pub = nh.advertise<PointCloud> ("keypoints", 0);
-  filt_pub = nh.advertise<PointCloud> ("cloud", 0);
+  kpc_pub = nh.advertise<PointCloud> ("keypoint_cloud", 0);
+  cloud_pub = nh.advertise<PointCloud> ("cloud", 0);
   if (descriptorEstimation)
     feature_pub = nh.advertise<PointDescriptorCloud> ("features", 0);
   
@@ -89,7 +90,7 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   /* Rotate Point Cloud */
   ////////////////////////
   rotateCloud(cloud_full);
-  
+
   ////////////////////////
   /* Filter Point Cloud */
   ////////////////////////
@@ -97,20 +98,13 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
   *cloud = *cloud_full;
   filterCloud(cloud);
 
-  cloud->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
-  filt_pub.publish (cloud);
-  
   ////////////////////////
   /* Keypoint detection */
   ////////////////////////
   PointCloud::Ptr keypoints(new PointCloud());
+  PointCloud::Ptr keypoint_cloud(new PointCloud());
 
-  estimateKeypoints(cloud,keypoints);
-
-  keypoints->header.frame_id = msg->header.frame_id;
-  pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
-  kp_pub.publish (keypoints);
+  estimateKeypoints(cloud,keypoints,keypoint_cloud);
 
   ////////////////
   /* Descriptor */
@@ -128,7 +122,22 @@ void FeatureExtractionNode::cloudCallback (const sensor_msgs::PointCloud2ConstPt
     pcl_conversions::toPCL(msg->header.stamp, pt_descriptors->header.stamp);
     feature_pub.publish(pt_descriptors);
   }
+  
+  ////////////////
+  /* Publishers */
+  ////////////////
+  keypoints->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, keypoints->header.stamp);
+  kp_pub.publish (keypoints);
 
+  keypoint_cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, keypoint_cloud->header.stamp);
+  kpc_pub.publish (keypoint_cloud);
+
+  cloud->header.frame_id = msg->header.frame_id;
+  pcl_conversions::toPCL(msg->header.stamp, cloud->header.stamp);
+  cloud_pub.publish (cloud);
+  
   /* end */
 
   // pcl::console::print_highlight ("Loop time: %lfs\n", watch.getTimeSeconds ());
@@ -173,7 +182,7 @@ void FeatureExtractionNode::filterCloud (PointCloud::Ptr cloud){
   /* end */
 }
 
-void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints)
+void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints, PointCloud::Ptr keypoint_cloud)
 {
   /* Keypoint Detection */
   pcl::PassThrough<Point> filter;
@@ -184,15 +193,17 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   double channelElevationDegrees;
 
   for (int i = 0; i<16; ++i){
-    PointCloud::Ptr cylinderLocations(new PointCloud);
+    PointCloud::Ptr cylinderCentroids(new PointCloud);
+    PointCloud::Ptr cylinderCloud(new PointCloud);
     PointCloud::Ptr channel(new PointCloud);
     
     channelElevationDegrees = (i-7)*2-1;
     filter.setFilterLimits(channelElevationDegrees-1.0, channelElevationDegrees+1.0); // group by channels
     filter.filter(*channel);
-    getCylinderLocations(channel,cylinderLocations);
+    getCylinderSegments(channel,cylinderCentroids,cylinderCloud);
 
-    *keypoints_full += *cylinderLocations;
+    *keypoints_full += *cylinderCentroids;
+    *keypoint_cloud += *cylinderCloud;
   }
 
   if (keypoints_full->points.size()<=0)
@@ -220,17 +231,39 @@ void FeatureExtractionNode::estimateKeypoints (const PointCloud::Ptr cloud, Poin
   for (int i = 0; i<keypoints_full->points.size(); ++i)
     keypoints_full->points[i].z = zhold[i];
 
-  keypointsFromClusters(clusterIndices,keypoints_full,false,keypoints);
+  if (clusterIndices->size()<=0)
+    return;
 
+  /* Keypoints from cluster indices */
+  for (int i = 0; i < clusterIndices->size (); ++i){
+    
+    Point pt_centroid; // stores point of the cluster centroid
+
+    double sumx = 0.0, sumy = 0.0, sumz = 0.0;
+    int clusterSize = (*clusterIndices)[i].indices.size ();
+
+    for (int j = 0; j < clusterSize; ++j){
+      sumx += keypoints_full->points[(*clusterIndices)[i].indices[j]].x;
+      sumy += keypoints_full->points[(*clusterIndices)[i].indices[j]].y;
+      sumz += keypoints_full->points[(*clusterIndices)[i].indices[j]].z;
+    }
+
+    pt_centroid.x = sumx/( (double) clusterSize );
+    pt_centroid.y = sumy/( (double) clusterSize );
+    pt_centroid.z = sumz/( (double) clusterSize );
+    pt_centroid.intensity = keypoints_full->points[(*clusterIndices)[i].indices[0]].intensity;
+
+    keypoints->points.push_back(pt_centroid);
+  }
   /* end */
 }
 
-void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints){
+void FeatureExtractionNode::getCylinderSegments (const PointCloud::Ptr cloud, PointCloud::Ptr keypoints, PointCloud::Ptr keypoint_cloud){
   
   if (cloud->points.size()<=0)
     return;
 
-  // --- Perform Euclidean clustering
+  /* Perform Euclidean clustering */
   IndicesClustersPtr clusterIndices (new IndicesClusters);
 
   pcl::EuclideanClusterExtraction<Point> clustering; // Euclidean clustering object
@@ -242,18 +275,14 @@ void FeatureExtractionNode::getCylinderLocations (const PointCloud::Ptr cloud, P
 
   clustering.extract(*clusterIndices);
 
-  keypointsFromClusters(clusterIndices,cloud,true,keypoints);
-
-}
-
-void FeatureExtractionNode::keypointsFromClusters (const IndicesClustersPtr clusterIndices, const PointCloud::Ptr cloud, const bool conditionCheck, PointCloud::Ptr keypoints){
-  
   if (clusterIndices->size()<=0)
     return;
 
+  /* Keypoints from cluster indices (with conditioning on max radius) */
   for (int i = 0; i < clusterIndices->size (); ++i){
     
     Point pt_centroid; // stores point of the cluster centroid
+    PointCloud::Ptr cluster(new PointCloud); // the point cloud of the current cluster
 
     double x,y,z;
     double sumx = 0.0, sumy = 0.0, sumz = 0.0;
@@ -274,17 +303,24 @@ void FeatureExtractionNode::keypointsFromClusters (const IndicesClustersPtr clus
         maxx=x;
       if (y>maxy)
         maxy=y;
+
+      Point pt; // stores point of the cluster centroid
+      pt.x = x; pt.y = y; pt.z = z; 
+      pt.intensity = cloud->points[(*clusterIndices)[i].indices[j]].intensity;
+      cluster->points.push_back(pt);
+
     }
 
     double diameter = pow(pow(maxx-minx,2)+pow(maxy-miny,2),0.5);
     
-    if ((diameter<(2*clusterRadiusThreshold)) || !conditionCheck ){
+    if (diameter<(2*clusterRadiusThreshold)) {
       pt_centroid.x = sumx/( (double) clusterSize );
       pt_centroid.y = sumy/( (double) clusterSize );
       pt_centroid.z = sumz/( (double) clusterSize );
       pt_centroid.intensity = cloud->points[(*clusterIndices)[i].indices[0]].intensity;
 
       keypoints->points.push_back(pt_centroid);
+      *keypoint_cloud += *cluster;
     }
   }
 
