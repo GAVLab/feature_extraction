@@ -2,6 +2,10 @@
 
 A ROS package for feature extraction through PCL. The features include tall, cylindrical objects such as light posts or trees.
 
+## Deprecation Warning ##
+
+This version could be out of date. All new versions will be stored on gavgit.
+
 ## Dependencies ##
 - pcl
 
